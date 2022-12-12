@@ -36,6 +36,9 @@
             "preLaunchTask": "docker-run: debug",
             "netCore": {
                 "appProject": "${workspaceFolder}/src/Api.Project.Template.Api/Api.Project.Template.Api.csproj"
+            },
+            "dockerServerReadyAction": {
+                "uriFormat": "%s://localhost:%s/swagger"
             }
         }
     ]
