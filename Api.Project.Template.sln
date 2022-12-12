@@ -7,9 +7,14 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Api.Project.Template.Api", 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{77FDD033-5A2F-482E-B39F-8ABD5CC2AD04}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Api.Project.Template.Core", "src\Api.Project.Template.Core\Api.Project.Template.Core.csproj", "{E136B6EB-4FA6-4573-8251-83DAF6BA6CA5}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Api.Project.Template.Core", "src\Api.Project.Template.Core\Api.Project.Template.Core.csproj", "{E136B6EB-4FA6-4573-8251-83DAF6BA6CA5}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Api.Project.Template.Infrastructure", "src\Api.Project.Template.Infrastructure\Api.Project.Template.Infrastructure.csproj", "{495B739B-64D9-471F-ADED-0689B6C95DB8}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Api.Project.Template.Infrastructure", "src\Api.Project.Template.Infrastructure\Api.Project.Template.Infrastructure.csproj", "{495B739B-64D9-471F-ADED-0689B6C95DB8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{533BC650-293E-4F75-B605-A15174589430}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
