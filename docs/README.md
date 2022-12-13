@@ -47,10 +47,10 @@ Included in the solution:
 
 - [x] .NET 6 Web Api
 - [x] Logging
-- [ ] Event Hub Producer client
-- [ ] Service Bus client
 - [ ] Repository
 - [ ] Http client
+- [ ] Service Bus client
+- [ ] Event Hub Producer client
 - [ ] Unit Tests
 - [ ] Integration Tests
 - [ ] Benchmark Tests
