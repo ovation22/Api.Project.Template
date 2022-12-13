@@ -1,0 +1,32 @@
+{
+    "$schema": "http://json.schemastore.org/template",
+    "author": "John Callaway",
+    "classifications": ["Web", "WebAPI", "ASP.NET", "Clean Architecture"],
+    "identity": "Api.Project.Template",
+    "name": ".NET Api Project Template",
+    "shortName": "api-project",
+    "sourceName": "Api.Project.Template",
+    "preferNameDirectory": true,
+    "tags": {
+        "language": "C#",
+        "type":"project"
+    },
+    "sources": [{
+        "exclude": [
+            ".git/**/*",
+            "**/[Bb]in/**",
+            "**/[Oo]bj/**",
+            ".template.config/**/*",
+            "**/*.filelist",
+            "**/*.user",
+            "**/*.lock.json"
+        ]
+    }],
+    "symbols": {
+        "appInsights": {
+            "type": "parameter",
+            "replaces": "{{ApplicationInsightsConnectionString}}",
+            "description": "Application Insights Connection String"
+        }
+    }
+}
