@@ -12,12 +12,16 @@ Template repository for a .NET Web Api project.
 
 Clone or download this repository.
 
+```powershell
+git clone https://github.com/ovation22/Api.Project.Template.git
+```
+
 ### Install Project Template
 
 Then run the following command to install this project template:
 
 ```powershell
-dotnet new install ./
+dotnet new install ./Api.Project.Template
 ```
 
 You should now see the `api-project` template installed successfully.
