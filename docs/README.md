@@ -51,9 +51,9 @@ Included in the solution:
 - [ ] Http client
 - [ ] Service Bus client
 - [ ] Event Hub Producer client
-- [ ] Unit Tests
+- [x] Unit Tests
 - [ ] Integration Tests
-- [ ] Benchmark Tests
+- [x] Benchmark Tests
 - [ ] Architectural Tests
 
 ### Core Project
