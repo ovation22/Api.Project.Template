@@ -52,7 +52,7 @@ Included in the solution:
 - [ ] Service Bus client
 - [ ] Event Hub Producer client
 - [x] Unit Tests
-- [ ] Integration Tests
+- [x] Integration Tests
 - [x] Benchmark Tests
 - [ ] Architectural Tests
 
