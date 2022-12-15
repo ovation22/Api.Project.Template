@@ -1,3 +1,5 @@
+[![.NET](https://github.com/ovation22/Api.Project.Template/actions/workflows/dotnet.yml/badge.svg)](https://github.com/ovation22/Api.Project.Template/actions/workflows/dotnet.yml)
+
 # A .NET Project Template
 
 Template repository for a .NET Web Api project.
