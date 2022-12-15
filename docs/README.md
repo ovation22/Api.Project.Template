@@ -78,7 +78,9 @@ Most of your application's dependencies on external resources should be implemen
 
 The entry point of the application is the Api project. The Api project should include things like:
 
+- Program.cs
 - Controllers
+- Configurations
 
 ### Test Projects
 
