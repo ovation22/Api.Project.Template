@@ -56,7 +56,7 @@ Included in the solution:
 - [x] Unit Tests
 - [x] Integration Tests
 - [x] Benchmark Tests
-- [ ] Architectural Tests
+- [x] Architectural Tests
 
 ### Core Project
 
