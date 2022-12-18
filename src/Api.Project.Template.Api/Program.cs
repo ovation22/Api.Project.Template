@@ -1,3 +1,4 @@
+using Api.Project.Template.Api.Config;
 using Api.Project.Template.Core.Interfaces.Logging;
 using Api.Project.Template.Infrastructure.Logging;
 using Microsoft.AspNetCore.Builder;
@@ -18,6 +19,8 @@ public class Program
 
         builder.Services.AddHttpContextAccessor();
 
+        builder.Services.AddHealthCheckConfig();
+
         builder.Services.AddControllers();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
@@ -27,6 +30,8 @@ public class Program
         var app = builder.Build();
 
         app.UseSerilogRequestLogging();
+
+        app.UseHealthCheckConfig();
 
         if (app.Environment.IsDevelopment())
         {
