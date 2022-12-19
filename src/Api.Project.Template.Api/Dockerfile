@@ -3,6 +3,9 @@ WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 
+RUN apk --no-cache add curl
+HEALTHCHECK --interval=5s --timeout=10s --retries=3 CMD curl --silent --fail http://localhost/healthz/ready || exit 1
+
 FROM mcr.microsoft.com/dotnet/sdk:6.0-alpine AS build
 WORKDIR /src
 COPY ["src/Api.Project.Template.Api/Api.Project.Template.Api.csproj", "src/Api.Project.Template.Api/"]
