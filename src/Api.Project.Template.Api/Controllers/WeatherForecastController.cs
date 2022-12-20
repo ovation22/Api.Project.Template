@@ -1,7 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using Api.Project.Template.Core.Interfaces.Logging;
+using Api.Project.Template.Core.Interfaces.Services;
+using Api.Project.Template.Core.Models.DTO;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Project.Template.Api.Controllers;
@@ -11,26 +13,31 @@ namespace Api.Project.Template.Api.Controllers;
 public class WeatherForecastController : ControllerBase
 {
     private readonly ILoggerAdapter<WeatherForecastController> _logger;
+    private readonly IWeatherForecastService _service;
 
-    private static readonly string[] Summaries =
-    {
-        "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-    };
-
-    public WeatherForecastController(ILoggerAdapter<WeatherForecastController> logger)
+    public WeatherForecastController(IWeatherForecastService service, ILoggerAdapter<WeatherForecastController> logger)
     {
         _logger = logger;
+        _service = service;
     }
 
     [HttpGet(Name = "GetWeatherForecast")]
-    public IEnumerable<WeatherForecast> Get()
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesDefaultResponseType]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<IEnumerable<WeatherForecast>> Get()
     {
-        return Enumerable.Range(1, 5).Select(index => new WeatherForecast
-            {
-                Date = DateTime.Now.AddDays(index),
-                TemperatureC = Random.Shared.Next(-20, 55),
-                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
-            })
-            .ToArray();
+        try
+        {
+            var result = _service.GetWeatherForecast();
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, ex.Message);
+        }
+
+        return Problem("Unable to return forecast", statusCode: StatusCodes.Status400BadRequest);
     }
 }
