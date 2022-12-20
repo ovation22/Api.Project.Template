@@ -43,6 +43,8 @@ public class Program
             app.UseSwaggerUI();
         }
 
+        app.UseExceptionHandler();
+
         app.UseHttpsRedirection();
 
         app.UseAuthorization();
