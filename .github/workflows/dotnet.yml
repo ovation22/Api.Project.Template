@@ -16,16 +16,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
       with:
         dotnet-version: 7.0.x
+
     - name: Restore dependencies
       run: dotnet restore
+
     - name: Build
       run: dotnet build --no-restore
+
     - name: Test
       run: dotnet test --no-build --verbosity normal --logger trx --results-directory "TestResults"
+
     - name: Upload dotnet test results
       uses: actions/upload-artifact@v3
       with:
@@ -33,3 +38,15 @@ jobs:
         path: TestResults
       # Use always() to always run this step to publish test results when there are test failures
       if: ${{ always() }}
+
+    - name: Benchmark
+      run: dotnet run --project ./tests/Api.Project.Template.Tests.Benchmark -c Release
+
+    - name: Upload Benchmark results
+      uses: actions/upload-artifact@v3
+      with:
+        name: benchmark-results
+        path: BenchmarkDotNet.Artifacts/results/*.md
+      # Use always() to always run this step to publish test results when there are test failures
+      if: ${{ always() }}
+      
