@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Api.Project.Template.Core.Interfaces.Services;
@@ -8,7 +8,7 @@ namespace Api.Project.Template.Core.Services;
 
 public class WeatherForecastService : IWeatherForecastService
 {
-    private static readonly string[] Summaries =
+    private static readonly string[] _summaries =
     {
         "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
     };
@@ -19,7 +19,7 @@ public class WeatherForecastService : IWeatherForecastService
             {
                 Date = DateTime.Now.AddDays(index),
                 TemperatureC = Random.Shared.Next(-20, 55),
-                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
+                Summary = _summaries[Random.Shared.Next(_summaries.Length)]
             })
             .ToArray();
     }
