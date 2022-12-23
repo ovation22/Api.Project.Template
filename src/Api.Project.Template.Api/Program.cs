@@ -2,8 +2,11 @@
 using Api.Project.Template.Core.Interfaces.Logging;
 using Api.Project.Template.Core.Interfaces.Services;
 using Api.Project.Template.Core.Services;
+using Api.Project.Template.Infrastructure.Data;
 using Api.Project.Template.Infrastructure.Logging;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -27,6 +30,9 @@ public class Program
         builder.Services.AddProblemDetails();
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
+
+        builder.Services.AddDbContextPool<Context>(options =>
+            options.UseSqlServer(builder.Configuration.GetConnectionString("Database")!));
 
         builder.Services.AddScoped<IWeatherForecastService, WeatherForecastService>();
         builder.Services.AddSingleton(typeof(ILoggerAdapter<>), typeof(LoggerAdapter<>));
