@@ -49,7 +49,7 @@ Included in the solution:
 
 - [x] .NET 7 Web Api
 - [x] Logging
-- [ ] Repository
+- [x] Repository
 - [ ] Http client
 - [ ] Service Bus client
 - [ ] Event Hub Producer client
