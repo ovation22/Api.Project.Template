@@ -26,7 +26,7 @@ public class Program
 
         builder.Services.AddHttpContextAccessor();
 
-        builder.Services.AddHealthCheckConfig();
+        builder.Services.AddHealthCheckConfig(builder.Configuration);
 
         builder.Services.AddControllers();
         builder.Services.AddProblemDetails();
