@@ -1,23 +1,23 @@
 ﻿using Microsoft.Extensions.Logging;
-using Moq;
 using Xunit;
 using Api.Project.Template.Infrastructure.Logging;
+using NSubstitute;
 
 namespace Api.Project.Template.Tests.Unit.Infrastructure.Logging.LoggerAdapter;
 
 public class LogErrorTests
 {
     private readonly Exception _exception;
-    private readonly Mock<ILogger<LogErrorTests>> _loggerMock;
+    private readonly ILogger<LogErrorTests> _logger;
     private readonly LoggerAdapter<LogErrorTests> _loggerAdapter;
 
     public LogErrorTests()
     {
         _exception = new Exception();
-        _loggerMock = new Mock<ILogger<LogErrorTests>>();
-        _loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+        _logger = Substitute.For<ILogger<LogErrorTests>>();
+        _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
 
-        _loggerAdapter = new LoggerAdapter<LogErrorTests>(_loggerMock.Object);
+        _loggerAdapter = new LoggerAdapter<LogErrorTests>(_logger);
     }
 
     [Fact]
@@ -28,8 +28,7 @@ public class LogErrorTests
         _loggerAdapter.LogError(_exception, "It exists");
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -40,8 +39,7 @@ public class LogErrorTests
         _loggerAdapter.LogError(_exception, "It exists {1}", 1);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -52,8 +50,7 @@ public class LogErrorTests
         _loggerAdapter.LogError(_exception, "It exists {1} {2}", 1, 2);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -64,7 +61,6 @@ public class LogErrorTests
         _loggerAdapter.LogError(_exception, "It exists {1} {2} {3}", 1, 2, 3);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 }

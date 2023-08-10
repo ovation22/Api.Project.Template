@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Xunit;
 using Api.Project.Template.Infrastructure.Logging;
 
@@ -8,16 +8,16 @@ namespace Api.Project.Template.Tests.Unit.Infrastructure.Logging.LoggerAdapter;
 public class LogWarningTests
 {
     private readonly Exception _exception;
-    private readonly Mock<ILogger<LogWarningTests>> _loggerMock;
+    private readonly ILogger<LogWarningTests> _logger;
     private readonly LoggerAdapter<LogWarningTests> _loggerAdapter;
 
     public LogWarningTests()
     {
         _exception = new Exception();
-        _loggerMock = new Mock<ILogger<LogWarningTests>>();
-        _loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+        _logger = Substitute.For<ILogger<LogWarningTests>>();
+        _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
 
-        _loggerAdapter = new LoggerAdapter<LogWarningTests>(_loggerMock.Object);
+        _loggerAdapter = new LoggerAdapter<LogWarningTests>(_logger);
     }
 
     [Fact]
@@ -28,8 +28,7 @@ public class LogWarningTests
         _loggerAdapter.LogWarning("It exists");
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -40,8 +39,7 @@ public class LogWarningTests
         _loggerAdapter.LogWarning("It exists {1}", 1);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -52,8 +50,7 @@ public class LogWarningTests
         _loggerAdapter.LogWarning("It exists {1} {2}", 1, 2);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -64,8 +61,7 @@ public class LogWarningTests
         _loggerAdapter.LogWarning("It exists {1} {2} {3}", 1, 2, 3);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -76,8 +72,7 @@ public class LogWarningTests
         _loggerAdapter.LogWarning(_exception, "It exists");
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -88,8 +83,7 @@ public class LogWarningTests
         _loggerAdapter.LogWarning(_exception, "It exists {1}", 1);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -100,8 +94,7 @@ public class LogWarningTests
         _loggerAdapter.LogWarning(_exception, "It exists {1} {2}", 1, 2);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -112,7 +105,6 @@ public class LogWarningTests
         _loggerAdapter.LogWarning(_exception, "It exists {1} {2} {3}", 1, 2, 3);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 }
