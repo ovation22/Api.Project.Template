@@ -7,13 +7,11 @@ namespace Api.Project.Template.Tests.Unit.Infrastructure.Logging.LoggerAdapter;
 
 public class LogInformationTests
 {
-    private readonly Exception _exception;
     private readonly ILogger<LogInformationTests> _logger;
     private readonly LoggerAdapter<LogInformationTests> _loggerAdapter;
 
     public LogInformationTests()
     {
-        _exception = new Exception(); 
         _logger = Substitute.For<ILogger<LogInformationTests>>();
         _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
 
