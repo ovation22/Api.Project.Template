@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
-using Moq;
+using NSubstitute;
 using Xunit;
 using Api.Project.Template.Infrastructure.Logging;
 
@@ -8,16 +8,16 @@ namespace Api.Project.Template.Tests.Unit.Infrastructure.Logging.LoggerAdapter;
 public class LogInformationTests
 {
     private readonly Exception _exception;
-    private readonly Mock<ILogger<LogInformationTests>> _loggerMock;
+    private readonly ILogger<LogInformationTests> _logger;
     private readonly LoggerAdapter<LogInformationTests> _loggerAdapter;
 
     public LogInformationTests()
     {
-        _exception = new Exception();
-        _loggerMock = new Mock<ILogger<LogInformationTests>>();
-        _loggerMock.Setup(x => x.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+        _exception = new Exception(); 
+        _logger = Substitute.For<ILogger<LogInformationTests>>();
+        _logger.IsEnabled(Arg.Any<LogLevel>()).Returns(true);
 
-        _loggerAdapter = new LoggerAdapter<LogInformationTests>(_loggerMock.Object);
+        _loggerAdapter = new LoggerAdapter<LogInformationTests>(_logger);
     }
 
     [Fact]
@@ -28,8 +28,7 @@ public class LogInformationTests
         _loggerAdapter.LogInformation("It exists");
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -40,8 +39,7 @@ public class LogInformationTests
         _loggerAdapter.LogInformation("It exists {1}", 1);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -52,8 +50,7 @@ public class LogInformationTests
         _loggerAdapter.LogInformation("It exists {1} {2}", 1, 2);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 
     [Fact]
@@ -64,7 +61,6 @@ public class LogInformationTests
         _loggerAdapter.LogInformation("It exists {1} {2} {3}", 1, 2, 3);
 
         // Assert
-        _loggerMock.Verify();
-        Assert.Equal(2, _loggerMock.Invocations.Count);
+        Assert.Equal(2, _logger.ReceivedCalls().Count());
     }
 }
