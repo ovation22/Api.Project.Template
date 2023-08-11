@@ -1,0 +1,13 @@
+version: '3.4'
+
+services:
+  api.project.template.api:
+    image: ${DOCKER_REGISTRY-}apiprojecttemplateapi
+    build:
+      context: .
+      dockerfile: src/Api.Project.Template.Api/Dockerfile
+    depends_on:
+      - seq
+
+  seq:
+    image: datalust/seq:latest

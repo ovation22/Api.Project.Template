@@ -1,0 +1,18 @@
+version: '3.4'
+
+services:
+  api.project.template.api:
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://0.0.0.0:80
+    ports:
+      - "5150:80"
+    volumes:
+      - ${APPDATA}/Microsoft/UserSecrets:/root/.microsoft/usersecrets:ro
+      - ${APPDATA}/ASP.NET/Https:/root/.aspnet/https:ro
+
+  seq:
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:80"

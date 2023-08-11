@@ -15,7 +15,7 @@ WORKDIR "/src/src/Api.Project.Template.Api"
 RUN dotnet build "Api.Project.Template.Api.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "Api.Project.Template.Api.csproj" -c Release -o /app/publish /p:UseAppHost=false -r linux-musl-x64
+RUN dotnet publish "Api.Project.Template.Api.csproj" -c Release -o /app/publish -r linux-musl-x64
 
 FROM base AS final
 WORKDIR /app
