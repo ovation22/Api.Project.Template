@@ -33,7 +33,7 @@ jobs:
 
     - name: Test Report
       uses: dorny/test-reporter@v1.6.0
-      if: ${{ always() }}
+      if: always()
       with:
         name: Test Results
         path: "**/TestResults/*.trx"                            
@@ -43,11 +43,7 @@ jobs:
     - name: Benchmark
       run: dotnet run --project ./tests/Api.Project.Template.Tests.Benchmark -c Release
 
-    - name: Upload Benchmark results
-      uses: actions/upload-artifact@v3
-      with:
-        name: benchmark-results
-        path: BenchmarkDotNet.Artifacts/results/*.md
-      # Use always() to always run this step to publish test results when there are test failures
-      if: ${{ always() }}
+    - name: Benchmark Summary
+      if: always()
+      run: cat BenchmarkDotNet.Artifacts/results/*.md >$GITHUB_STEP_SUMMARY
       
