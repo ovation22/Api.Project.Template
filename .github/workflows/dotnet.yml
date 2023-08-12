@@ -31,13 +31,14 @@ jobs:
     - name: Test
       run: dotnet test --no-build --verbosity normal --logger trx --results-directory "TestResults"
 
-    - name: Upload dotnet test results
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-results
-        path: TestResults
-      # Use always() to always run this step to publish test results when there are test failures
+    - name: Test Report
+      uses: dorny/test-reporter@v1.6.0
       if: ${{ always() }}
+      with:
+        name: DotNET Tests
+        path: "**/TestResults/*.trx"                            
+        reporter: dotnet-trx
+        fail-on-error: true
 
     - name: Benchmark
       run: dotnet run --project ./tests/Api.Project.Template.Tests.Benchmark -c Release
