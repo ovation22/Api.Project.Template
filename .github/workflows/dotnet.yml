@@ -40,28 +40,27 @@ jobs:
         reporter: dotnet-trx
         fail-on-error: true
 
-    - name: Code Coverage Report
-      uses: irongut/CodeCoverageSummary@v1.3.0
-      if: always()
+    - name: Setup .NET Core # Required to execute ReportGenerator
+      uses: actions/setup-dotnet@v3
       with:
-        filename: TestResults/**/coverage.cobertura.xml
-        badge: true
-        fail_below_min: true
-        format: markdown
-        hide_branch_rate: false
-        hide_complexity: true
-        indicators: true
-        output: both
-        thresholds: '10 10'
+        dotnet-version: 6.x
+        dotnet-quality: 'ga'
+    
+    - name: ReportGenerator
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.1.24
+      with:
+        reports: '$(Build.SourcesDirectory)/CodeCoverage/Cobertura.xml'
+        targetdir: coveragereport
+        reporttypes: MarkdownSummaryGithub
 
     - name: Code Coverage Summary
       if: always()
-      run: cat code-coverage-results.md >$GITHUB_STEP_SUMMARY
+      run: cat code-coverage-results.md > $GITHUB_STEP_SUMMARY
 
     - name: Benchmark
       run: dotnet run --project ./tests/Api.Project.Template.Tests.Benchmark -c Release
 
     - name: Benchmark Summary
       if: always()
-      run: cat BenchmarkDotNet.Artifacts/results/*.md >>$GITHUB_STEP_SUMMARY
+      run: cat BenchmarkDotNet.Artifacts/results/*.md >> $GITHUB_STEP_SUMMARY
       
