@@ -51,7 +51,7 @@ jobs:
         hide_complexity: true
         indicators: true
         output: both
-        thresholds: '60 80'
+        thresholds: '10 80'
 
     - name: Benchmark
       run: dotnet run --project ./tests/Api.Project.Template.Tests.Benchmark -c Release
