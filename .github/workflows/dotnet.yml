@@ -49,7 +49,7 @@ jobs:
     - name: ReportGenerator
       uses: danielpalme/ReportGenerator-GitHub-Action@5.1.24
       with:
-        reports: '$(Build.SourcesDirectory)/CodeCoverage/Cobertura.xml'
+        reports: "**/TestResults/**/coverage.cobertura.xml"
         targetdir: coveragereport
         reporttypes: MarkdownSummaryGithub
 
