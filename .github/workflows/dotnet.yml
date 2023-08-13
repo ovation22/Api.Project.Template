@@ -55,6 +55,13 @@ jobs:
         title: 'Code Coverage'
         tag: '${{ github.run_number }}_${{ github.run_id }}'
 
+    - name: Add Coverage PR Comment
+      uses: marocchino/sticky-pull-request-comment@v2
+      if: github.event_name == 'pull_request'
+      with:
+        recreate: true
+        path: coveragereport/*.md
+
     - name: Code Coverage Summary
       if: always()
       run: cat coveragereport/*.md > $GITHUB_STEP_SUMMARY
