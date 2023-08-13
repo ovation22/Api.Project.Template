@@ -55,7 +55,7 @@ jobs:
 
     - name: Code Coverage Summary
       if: always()
-      run: cat code-coverage-results.md > $GITHUB_STEP_SUMMARY
+      run: cat coveragereport/*.md > $GITHUB_STEP_SUMMARY
 
     - name: Benchmark
       run: dotnet run --project ./tests/Api.Project.Template.Tests.Benchmark -c Release
