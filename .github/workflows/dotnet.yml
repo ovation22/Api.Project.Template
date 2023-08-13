@@ -51,7 +51,9 @@ jobs:
       with:
         reports: "**/TestResults/**/coverage.cobertura.xml"
         targetdir: coveragereport
-        reporttypes: MarkdownSummaryGithub
+        reporttypes: MarkdownSummaryGithub   
+        title: 'Code Coverage'
+        tag: '${{ github.run_number }}_${{ github.run_id }}'
 
     - name: Code Coverage Summary
       if: always()
