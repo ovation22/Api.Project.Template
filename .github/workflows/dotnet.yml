@@ -54,10 +54,14 @@ jobs:
         output: both
         thresholds: '10 10'
 
+    - name: Code Coverage Summary
+      if: always()
+      run: cat code-coverage-results.md >$GITHUB_STEP_SUMMARY
+
     - name: Benchmark
       run: dotnet run --project ./tests/Api.Project.Template.Tests.Benchmark -c Release
 
     - name: Benchmark Summary
       if: always()
-      run: cat BenchmarkDotNet.Artifacts/results/*.md >$GITHUB_STEP_SUMMARY
+      run: cat BenchmarkDotNet.Artifacts/results/*.md >>$GITHUB_STEP_SUMMARY
       
