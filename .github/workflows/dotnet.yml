@@ -42,6 +42,7 @@ jobs:
 
     - name: Code Coverage Report
       uses: irongut/CodeCoverageSummary@v1.3.0
+      if: always()
       with:
         filename: TestResults/**/coverage.cobertura.xml
         badge: true
