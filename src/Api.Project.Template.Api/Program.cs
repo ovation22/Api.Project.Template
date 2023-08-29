@@ -33,6 +33,8 @@ public class Program
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
 
+        builder.Services.AddRouting(x => x.LowercaseUrls = true);
+
         builder.Services.AddScoped(typeof(IRepository), typeof(ContextRepository));
         builder.Services.AddDbContextPool<Context>(options =>
             options.UseSqlServer(builder.Configuration.GetConnectionString("Database")!));
