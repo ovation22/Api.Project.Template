@@ -1,0 +1,36 @@
+parameters:
+
+- name: environment
+  type: string
+  default: 'Dev'
+
+- name: serviceConnection
+  type: string
+
+stages:
+  - stage: 'deploy_${{parameters.environment}}'
+    displayName: 'Deploy to ${{upper(parameters.environment)}}'
+    pool:
+      vmImage: ubuntu-20.04
+
+    jobs:
+    - deployment: 'deploy_${{parameters.environment}}'
+      displayName: 'Deploy to ${{upper(parameters.environment)}}'
+      workspace:
+        clean: all
+      environment: '${{parameters.environment}}'
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+            - checkout: none
+            - download: current
+              artifact: 'drop'
+            - task: AzureWebApp@1
+              displayName: 'Deploy .NET Web App to App Service'
+              inputs:
+                appType: 'webAppLinux'
+                azureSubscription: '${{parameters.serviceConnection}}'
+                appName: 'TODO-${{parameters.environment}}'
+                package: '$(Pipeline.Workspace)/drop/Api.Project.Template.Api.zip'
+                startUpCommand: 'dotnet Api.Project.Template.Api.dll'
