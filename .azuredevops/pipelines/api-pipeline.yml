@@ -1,0 +1,39 @@
+name: api.project.template.$(Date:yyyy.MM.dd).$(Rev:rr)
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+parameters:
+
+- name: configuration
+  displayName: 'Build Configuration'
+  default: 'Release'
+  type: string
+  values:
+  - 'Release'
+  - 'Debug'
+
+- name: benchmarks
+  displayName: 'Run the Benchmark tests?'
+  default: false
+  type: boolean
+
+stages:
+
+- template: 'templates/api-ci.yml'
+  parameters:
+    configuration: ${{parameters.configuration}}
+    benchmarks: ${{parameters.benchmarks}}
+
+- ${{ if ne(variables['Build.Reason'], 'PullRequest')}}:
+  - template: 'templates/api-cd.yml'
+    parameters:
+      environment: 'Dev'
+      serviceConnection: 'TODO'

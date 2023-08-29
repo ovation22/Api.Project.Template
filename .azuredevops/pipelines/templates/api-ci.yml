@@ -1,0 +1,100 @@
+parameters:
+
+- name: configuration
+  displayName: 'Build Configuration'
+  type: string
+  values:
+  - 'Release'
+  - 'Debug'
+
+- name: benchmarks
+  displayName: 'Build.Reason'
+  pool:
+    vmImage: ubuntu-20.04
+  
+jobs:
+- job: build
+  displayName: 'Build and Test'
+  steps:
+    - checkout: self
+    
+    - task: UseDotNet@2
+      displayName: 'Use .NET Core SDK 7.0.x'
+      inputs: 
+        packageType: 'sdk'
+        version: '7.0.x'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore'
+      inputs:
+        command: 'restore'
+        projects: '**/*.csproj'
+        feedsToUse: 'select'
+        verbosityRestore: 'quiet'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Build'
+      inputs:
+        command: 'build'
+        projects: '**/*.csproj'
+        arguments: '--configuration ${{parameters.configuration}} --no-restore'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Unit, Integration, and Architecture tests - ${{parameters.configuration}}'
+      inputs:
+        command: 'test'
+        projects: '**/*.csproj'
+        arguments: '--configuration ${{parameters.configuration}} /p:CollectCoverage=true --collect:"XPlat Code Coverage" /p:CoverletOutputFormat=opencover'
+        nobuild: true
+
+    - script: |
+        dotnet tool install -g dotnet-reportgenerator-globaltool --ignore-failed-sources
+        reportgenerator -reports:$(Agent.TempDirectory)/**/coverage.cobertura.xml -targetdir:$(Build.SourcesDirectory)/CodeCoverage -reporttypes:Cobertura
+      condition: succeededOrFailed()
+      displayName: 'Create Code Coverage Report'
+
+    - task: PublishCodeCoverageResults@1
+      displayName: 'Publish Code Coverage Results'
+      condition: succeededOrFailed()
+      inputs:
+        codeCoverageTool: 'Cobertura'
+        summaryFileLocation: '$(Build.SourcesDirectory)/CodeCoverage/Cobertura.xml'
+        pathToSources: '$(Build.SourcesDirectory)'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'Run Benchmarks'
+      condition: eq('${{parameters.benchmarks}}', true)
+      inputs:
+        command: 'run'
+        projects: '**/Api.Project.Template.Tests.Benchmark.csproj'
+        arguments: '--configuration Release no-build $(Build.SourcesDirectory)/BenchmarkDotNet.Artifacts'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Benchmark Results'
+      condition: eq('${{parameters.benchmarks}}', true)
+      inputs:
+        artifactName: 'Benchmarks'
+        PathToPublish: '$(Build.SourcesDirectory)/BenchmarkDotNet.Artifacts/results'
+
+    - task: publishhtmlreport@1
+      displayName: 'Publish Benchmark Report'
+      condition: eq('${{parameters.benchmarks}}', true)
+      inputs:
+        tabName: 'Benchmarks'
+        htmlType: 'genericHTML'
+        htmlPath: '$(Build.SourcesDirectory)/BenchmarkDotNet.Artifacts/results/Api.Project.Template.Tests.Benchmark.LoggingBenchmarks-report.html'
+
+    - task: DotNetCoreCLI@2
+      displayName: 'DotNet Publish'
+      inputs:
+        command: 'publish'
+        publishWebProjects: true
+        arguments: '--configuration ${{parameters.configuration}} -r "linux-x64" --self-contained false --output $(Build.ArtifactStagingDirectory)'
+        zipAfterPublish: true
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Artifacts'
+      inputs:
+        path: '$(Build.ArtifactStagingDirectory)'
+        targetpath: '$(Pipeline.Workspace)/'
+        artifactName: 'drop'
