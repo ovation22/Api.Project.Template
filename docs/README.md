@@ -47,7 +47,7 @@ dotnet new api-project -o Your.ProjectName \
 
 Included in the solution:
 
-- [x] .NET 7 Web Api
+- [x] .NET 8 Web Api
 - [x] Logging
 - [x] Repository
 - [ ] Http client
