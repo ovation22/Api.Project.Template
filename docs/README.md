@@ -107,3 +107,4 @@ Benchmark testing is provided by [BenchmarkDotNet](https://github.com/dotnet/Ben
 ```powershell
 dotnet run --project ./tests/Api.Project.Template.Tests.Benchmark -c Release
 ```
+
