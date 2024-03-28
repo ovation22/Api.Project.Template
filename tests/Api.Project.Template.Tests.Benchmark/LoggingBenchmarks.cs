@@ -41,6 +41,12 @@ public class LoggingBenchmarks
     {
         _logger.LogInformation("test {0}", BenchmarkLogLevel);
     }
+    
+    [Benchmark]
+    public void Logger_With_StringInterpolation()
+    {
+        _logger.LogInformation($"test {BenchmarkLogLevel}");
+    }
 
     [Benchmark]
     public void LoggerAdapter_With_Args()
