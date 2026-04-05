@@ -1,7 +1,9 @@
+using Api.Project.Template.Application.Abstractions;
 using Api.Project.Template.Application.Common.Pagination;
+using Api.Project.Template.Application.Common.Specifications;
 using Api.Project.Template.Application.Features.Weather.Queries;
 using Api.Project.Template.Application.Features.Weather.Queries.Handlers;
-using Api.Project.Template.Application.Features.Weather.Services;
+using Api.Project.Template.Domain.Entities;
 using FluentAssertions;
 using Moq;
 
@@ -9,17 +11,17 @@ namespace Api.Project.Template.Tests.Unit.Features.Weather.Queries;
 
 public class GetWeatherForecastsQueryHandlerTests
 {
-    private readonly Mock<IWeatherForecastService> _serviceMock;
+    private readonly Mock<IRepository> _repositoryMock;
     private readonly GetWeatherForecastsQueryHandler _handler;
 
     public GetWeatherForecastsQueryHandlerTests()
     {
-        _serviceMock = new Mock<IWeatherForecastService>();
-        _handler = new GetWeatherForecastsQueryHandler(_serviceMock.Object);
+        _repositoryMock = new Mock<IRepository>();
+        _handler = new GetWeatherForecastsQueryHandler(_repositoryMock.Object);
     }
 
     [Fact]
-    public async Task Handle_WhenServiceReturnsForecasts_ReturnsMappedResponses()
+    public async Task Handle_WhenRepositoryReturnsForecasts_ReturnsMappedResponses()
     {
         // Arrange
         var request = new PaginationRequest { Page = 1, Size = 10 };
@@ -30,8 +32,10 @@ public class GetWeatherForecastsQueryHandlerTests
         };
         var paged = new PagedList<GetWeatherForecastsResponse>(responses, responses.Count, 1, 10);
 
-        _serviceMock
-            .Setup(s => s.GetForecastsAsync(request, It.IsAny<CancellationToken>()))
+        _repositoryMock
+            .Setup(r => r.ListAsync(
+                It.IsAny<PaginatedSpecification<WeatherForecast, GetWeatherForecastsResponse>>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(paged);
 
         // Act
@@ -52,14 +56,16 @@ public class GetWeatherForecastsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenServiceReturnsNoForecasts_ReturnsEmptyCollection()
+    public async Task Handle_WhenRepositoryReturnsNoForecasts_ReturnsEmptyCollection()
     {
         // Arrange
         var request = new PaginationRequest();
         var empty = new PagedList<GetWeatherForecastsResponse>([], 0, 1, 10);
 
-        _serviceMock
-            .Setup(s => s.GetForecastsAsync(request, It.IsAny<CancellationToken>()))
+        _repositoryMock
+            .Setup(r => r.ListAsync(
+                It.IsAny<PaginatedSpecification<WeatherForecast, GetWeatherForecastsResponse>>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(empty);
 
         // Act
@@ -70,20 +76,24 @@ public class GetWeatherForecastsQueryHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenCalled_InvokesServiceExactlyOnce()
+    public async Task Handle_WhenCalled_InvokesRepositoryExactlyOnce()
     {
         // Arrange
         var request = new PaginationRequest();
         var empty = new PagedList<GetWeatherForecastsResponse>([], 0, 1, 10);
 
-        _serviceMock
-            .Setup(s => s.GetForecastsAsync(request, It.IsAny<CancellationToken>()))
+        _repositoryMock
+            .Setup(r => r.ListAsync(
+                It.IsAny<PaginatedSpecification<WeatherForecast, GetWeatherForecastsResponse>>(),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(empty);
 
         // Act
         await _handler.Handle(new GetWeatherForecastsQuery(request), CancellationToken.None);
 
         // Assert
-        _serviceMock.Verify(s => s.GetForecastsAsync(request, It.IsAny<CancellationToken>()), Times.Once);
+        _repositoryMock.Verify(r => r.ListAsync(
+            It.IsAny<PaginatedSpecification<WeatherForecast, GetWeatherForecastsResponse>>(),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }
