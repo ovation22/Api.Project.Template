@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Packages.props" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Api.Project.Template.Api/Api.Project.Template.Api.csproj" />
+    <Project Path="src/Api.Project.Template.AppHost/Api.Project.Template.AppHost.csproj" />
+    <Project Path="src/Api.Project.Template.Application/Api.Project.Template.Application.csproj" Id="ac223ca3-25b1-4ab6-929c-a1166b2db1dd" />
+    <Project Path="src/Api.Project.Template.Domain/Api.Project.Template.Domain.csproj" />
+    <Project Path="src/Api.Project.Template.Infrastructure/Api.Project.Template.Infrastructure.csproj" Id="599fb0ef-433a-4984-b541-1a2dfe81cee5" />
+    <Project Path="src/Api.Project.Template.ServiceDefaults/Api.Project.Template.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Api.Project.Template.Tests.Architecture/Api.Project.Template.Tests.Architecture.csproj" Id="21f69fb6-32cb-4c08-964f-96e91791c92f" />
+    <Project Path="tests/Api.Project.Template.Tests.Benchmark/Api.Project.Template.Tests.Benchmark.csproj" Id="3614fa15-1397-42c2-b4f0-e2f6766c31f2" />
+    <Project Path="tests/Api.Project.Template.Tests.Integration/Api.Project.Template.Tests.Integration.csproj" Id="b7ea2c13-bd12-4268-bc72-0cd2ffcb8c8a" />
+    <Project Path="tests/Api.Project.Template.Tests.Unit/Api.Project.Template.Tests.Unit.csproj" />
+  </Folder>
+</Solution>

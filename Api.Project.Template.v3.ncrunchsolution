@@ -1,9 +1,0 @@
-﻿<SolutionConfiguration>
-  <Settings>
-    <AllowParallelTestExecution>True</AllowParallelTestExecution>
-    <MetricsExclusionList>
-      <Value>tests\Api.Project.Template.Tests.Benchmark\Api.Project.Template.Tests.Benchmark.csproj</Value>
-    </MetricsExclusionList>
-    <SolutionConfigured>True</SolutionConfigured>
-  </Settings>
-</SolutionConfiguration>

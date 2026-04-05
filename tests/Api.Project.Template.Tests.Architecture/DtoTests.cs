@@ -1,6 +1,5 @@
-﻿using Api.Project.Template.Core.Models.DTO;
+using Api.Project.Template.Domain.Entities;
 using NetArchTest.Rules;
-using Xunit;
 
 namespace Api.Project.Template.Tests.Architecture;
 
@@ -16,13 +15,17 @@ public class DtoTests
     [Fact]
     public void Dto_ShouldNotReference_Entities()
     {
-        var result = _types
+        // Arrange
+        var rule = _types
             .That()
-            .ResideInNamespace("Api.Project.Template.Core.Models.DTO")
+            .ResideInNamespace("Api.Project.Template.Domain.DTOs")
             .ShouldNot()
-            .HaveDependencyOn("Api.Project.Template.Core.Models.Entities")
-            .GetResult();
+            .HaveDependencyOn("Api.Project.Template.Domain.Entities");
 
+        // Act
+        var result = rule.GetResult();
+
+        // Assert
         Assert.True(result.IsSuccessful, result.GetFailingTypes());
     }
 }

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+    push:
+        branches: [ main ]
+    pull_request:
+        branches: [ main ]
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v5
+            
+        - name: Setup .NET
+          uses: actions/setup-dotnet@v5
+          with:
+            dotnet-version: '9.0.x'
+                
+        - name: Restore dependencies
+          run: dotnet restore
+            
+        - name: Build
+          run: dotnet build --no-restore --configuration Release
+            
+        - name: Run tests with coverage
+          run: dotnet test --configuration Release --no-build --logger "trx" --results-directory ./TestResults --collect:"XPlat Code Coverage" --filter "Category!=LongRunning"
+          
+        - name: Publish test results
+          uses: EnricoMi/publish-unit-test-result-action@v2
+          if: always()
+          with:
+            files: TestResults/**/*.trx
+
+        - name: Generate coverage report
+          uses: danielpalme/ReportGenerator-GitHub-Action@5.2.4
+          with: 
+            reports: 'TestResults/**/*.cobertura.xml'
+            targetdir: 'CoverageReport'
+            reporttypes: 'MarkdownSummaryGitHub'
+            verbosity: 'Info'
+            title: 'Code Coverage Report'
+            toolpath: '~/.dotnet/tools/reportgenerator'
+
+        - name: Upload coverage report artifact
+          run: cat CoverageReport/SummaryGithub.md >> $GITHUB_STEP_SUMMARY
+          shell: bash

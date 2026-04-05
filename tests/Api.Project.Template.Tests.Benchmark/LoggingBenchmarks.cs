@@ -1,4 +1,4 @@
-﻿using Api.Project.Template.Core.Interfaces.Logging;
+﻿using Api.Project.Template.Application.Abstractions.Logging;
 using Api.Project.Template.Infrastructure.Logging;
 using BenchmarkDotNet.Attributes;
 using Microsoft.Extensions.Logging;

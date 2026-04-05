@@ -1,0 +1,62 @@
+@Api.Project.Template.Api_HostAddress = http://localhost:5230
+
+### Get all weather forecasts (simple pagination)
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast?page=1&size=10
+Accept: application/json
+
+### Get all weather forecasts with sorting
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast?page=1&size=10&SortBy=Date&Direction=Desc
+Accept: application/json
+
+### Filter by Date (greater than)
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast?page=1&size=10&Filters[Date].Operator=Gt&Filters[Date].Value=2024-01-01
+Accept: application/json
+
+### Filter by TemperatureC (greater than 20)
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast?page=1&size=10&Filters[TemperatureC].Operator=Gt&Filters[TemperatureC].Value=20
+Accept: application/json
+
+### Filter by Summary (contains "Sunny")
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast?page=1&size=10&Filters[Summary].Operator=Contains&Filters[Summary].Value=Sunny
+Accept: application/json
+
+### Filter by Summary (contains "Snow")
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast?page=1&size=10&Filters[Summary].Operator=Contains&Filters[Summary].Value=Snow
+Accept: application/json
+
+### Multiple filters with AND (temperature > 20 AND summary contains "Sunny")
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast?page=1&size=10&Operator=And&Filters[TemperatureC].Operator=Gt&Filters[TemperatureC].Value=20&Filters[Summary].Operator=Contains&Filters[Summary].Value=Sunny
+Accept: application/json
+
+### Multiple filters with OR (temperature < 0 OR summary contains "Snow")
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast?page=1&size=10&Operator=Or&Filters[TemperatureC].Operator=Lt&Filters[TemperatureC].Value=0&Filters[Summary].Operator=Contains&Filters[Summary].Value=Snow
+Accept: application/json
+
+### Get weather forecast by ID (Not Implemented)
+GET {{Api.Project.Template.Api_HostAddress}}/weatherforecast/1
+Accept: application/json
+
+### Create weather forecast (Not Implemented)
+POST {{Api.Project.Template.Api_HostAddress}}/weatherforecast
+Content-Type: application/json
+
+{
+  "date": "2024-06-01",
+  "temperatureC": 25,
+  "summary": "Sunny"
+}
+
+### Update weather forecast (Not Implemented)
+PUT {{Api.Project.Template.Api_HostAddress}}/weatherforecast/1
+Content-Type: application/json
+
+{
+  "date": "2024-06-01",
+  "temperatureC": 30,
+  "summary": "Hot"
+}
+
+### Delete weather forecast (Not Implemented)
+DELETE {{Api.Project.Template.Api_HostAddress}}/weatherforecast/1
+
+###
