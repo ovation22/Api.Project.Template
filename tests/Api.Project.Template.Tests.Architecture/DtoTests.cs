@@ -1,4 +1,4 @@
-using Api.Project.Template.Domain.Entities;
+using Api.Project.Template.Application.Features.Weather.Queries;
 using NetArchTest.Rules;
 
 namespace Api.Project.Template.Tests.Architecture;
@@ -9,16 +9,16 @@ public class DtoTests
 
     public DtoTests()
     {
-        _types = Types.InAssembly(typeof(WeatherForecast).Assembly);
+        _types = Types.InAssembly(typeof(GetWeatherForecastsResponse).Assembly);
     }
 
     [Fact]
-    public void Dto_ShouldNotReference_Entities()
+    public void ResponseTypes_ShouldNotReference_DomainEntities()
     {
         // Arrange
         var rule = _types
             .That()
-            .ResideInNamespace("Api.Project.Template.Domain.DTOs")
+            .HaveNameEndingWith("Response")
             .ShouldNot()
             .HaveDependencyOn("Api.Project.Template.Domain.Entities");
 

@@ -1,31 +1,42 @@
 using Api.Project.Template.Application.Abstractions.Logging;
+using Api.Project.Template.Domain.Entities;
+using Api.Project.Template.Infrastructure;
 using NetArchTest.Rules;
 
 namespace Api.Project.Template.Tests.Architecture;
 
 public class InterfaceTests
 {
-    private readonly Types _types;
-
-    public InterfaceTests()
+    [Fact]
+    public void ApplicationInterfaces_ShouldStartWithI()
     {
-        _types = Types.InAssembly(typeof(ILoggerAdapter<>).Assembly);
+        var result = Types.InAssembly(typeof(ILoggerAdapter<>).Assembly)
+            .That().AreInterfaces()
+            .Should().HaveNameStartingWith("I")
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, result.GetFailingTypes());
     }
 
     [Fact]
-    public void Interfaces_ShouldStartWithI()
+    public void DomainInterfaces_ShouldStartWithI()
     {
-        // Arrange
-        var rule = _types
-            .That()
-            .AreInterfaces()
-            .Should()
-            .HaveNameStartingWith("I");
+        var result = Types.InAssembly(typeof(WeatherForecast).Assembly)
+            .That().AreInterfaces()
+            .Should().HaveNameStartingWith("I")
+            .GetResult();
 
-        // Act
-        var result = rule.GetResult();
+        Assert.True(result.IsSuccessful, result.GetFailingTypes());
+    }
 
-        // Assert
+    [Fact]
+    public void InfrastructureInterfaces_ShouldStartWithI()
+    {
+        var result = Types.InAssembly(typeof(DependencyInjection).Assembly)
+            .That().AreInterfaces()
+            .Should().HaveNameStartingWith("I")
+            .GetResult();
+
         Assert.True(result.IsSuccessful, result.GetFailingTypes());
     }
 }
