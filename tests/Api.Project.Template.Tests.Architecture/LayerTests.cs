@@ -1,40 +1,39 @@
 using Api.Project.Template.Application.Abstractions.Logging;
 using Api.Project.Template.Domain.Entities;
-using Api.Project.Template.Infrastructure;
 using NetArchTest.Rules;
 
 namespace Api.Project.Template.Tests.Architecture;
 
-public class InterfaceTests
+public class LayerTests
 {
     [Fact]
-    public void ApplicationInterfaces_ShouldStartWithI()
+    public void Application_ShouldNotReference_Infrastructure()
     {
         var result = Types.InAssembly(typeof(ILoggerAdapter<>).Assembly)
-            .That().AreInterfaces()
-            .Should().HaveNameStartingWith("I")
+            .ShouldNot()
+            .HaveDependencyOn("Api.Project.Template.Infrastructure")
             .GetResult();
 
         Assert.True(result.IsSuccessful, result.GetFailingTypes());
     }
 
     [Fact]
-    public void DomainInterfaces_ShouldStartWithI()
+    public void Domain_ShouldNotReference_Application()
     {
         var result = Types.InAssembly(typeof(WeatherForecast).Assembly)
-            .That().AreInterfaces()
-            .Should().HaveNameStartingWith("I")
+            .ShouldNot()
+            .HaveDependencyOn("Api.Project.Template.Application")
             .GetResult();
 
         Assert.True(result.IsSuccessful, result.GetFailingTypes());
     }
 
     [Fact]
-    public void InfrastructureInterfaces_ShouldStartWithI()
+    public void Domain_ShouldNotReference_Infrastructure()
     {
-        var result = Types.InAssembly(typeof(DependencyInjection).Assembly)
-            .That().AreInterfaces()
-            .Should().HaveNameStartingWith("I")
+        var result = Types.InAssembly(typeof(WeatherForecast).Assembly)
+            .ShouldNot()
+            .HaveDependencyOn("Api.Project.Template.Infrastructure")
             .GetResult();
 
         Assert.True(result.IsSuccessful, result.GetFailingTypes());

@@ -1,15 +1,14 @@
+using Api.Project.Template.Api.Conventions;
 using Api.Project.Template.Application.Common.Pagination;
 using Api.Project.Template.Application.Features.Weather.Queries;
 using MediatR;
-using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Api.Project.Template.Api.Controllers;
 
 [ApiController]
 [Route("[controller]")]
-[ApiConventionType(typeof(DefaultApiConventions))]
+[ApiConventionType(typeof(ApiConventions))]
 public class WeatherForecastController(ISender sender) : ControllerBase
 {
     /// <summary>

@@ -268,13 +268,13 @@ sequenceDiagram
     Controller->>MediatR: ISender.Send(new GetWeatherForecastsQuery())
     MediatR->>Handler: Handle(query, cancellationToken)
     Handler->>Service: GetForecastsAsync()
-    Service->>Repository: GetAll<WeatherForecast>()
-    Repository->>Database: SELECT * FROM WeatherForecasts
+    Service->>Repository: ListAsync(spec)
+    Repository->>Database: SELECT (projected) FROM WeatherForecasts
     Database-->>Repository: rows
-    Repository-->>Service: IEnumerable<WeatherForecast>
-    Service-->>Handler: IEnumerable<WeatherForecast>
-    Handler-->>MediatR: IEnumerable<GetWeatherForecastsResponse>
-    MediatR-->>Controller: IEnumerable<GetWeatherForecastsResponse>
+    Repository-->>Service: PagedList<GetWeatherForecastsResponse>
+    Service-->>Handler: PagedList<GetWeatherForecastsResponse>
+    Handler-->>MediatR: PagedList<GetWeatherForecastsResponse>
+    MediatR-->>Controller: PagedList<GetWeatherForecastsResponse>
     Controller-->>Client: 200 OK (JSON)
 ```
 
