@@ -1,3 +1,4 @@
+using Api.Project.Template.Api.Conventions;
 using Api.Project.Template.Application.Common.Pagination;
 using Api.Project.Template.Application.Features.Weather.Queries;
 using MediatR;
@@ -7,7 +8,7 @@ namespace Api.Project.Template.Api.Controllers;
 
 [ApiController]
 [Route("[controller]")]
-[ApiConventionType(typeof(DefaultApiConventions))]
+[ApiConventionType(typeof(ApiConventions))]
 public class WeatherForecastController(ISender sender) : ControllerBase
 {
     /// <summary>
