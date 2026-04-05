@@ -13,8 +13,8 @@ public static class HealthConfig
     public static void AddHealthCheckConfig(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddHealthChecks()
-            .AddDbContextCheck<Context>()
-            .AddSqlServer(configuration.GetConnectionString("Database") ?? throw new InvalidOperationException());
+            .AddDbContextCheck<ApiProjectTemplateContext>()
+            .AddSqlServer(configuration.GetConnectionString("ApiProjectTemplate") ?? throw new InvalidOperationException());
     }
 
     public static void UseHealthCheckConfig(this WebApplication app)

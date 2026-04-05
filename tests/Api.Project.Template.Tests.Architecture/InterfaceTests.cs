@@ -1,6 +1,5 @@
-﻿using Api.Project.Template.Core.Interfaces.Logging;
+using Api.Project.Template.Application.Abstractions.Logging;
 using NetArchTest.Rules;
-using Xunit;
 
 namespace Api.Project.Template.Tests.Architecture;
 
@@ -16,13 +15,17 @@ public class InterfaceTests
     [Fact]
     public void Interfaces_ShouldStartWithI()
     {
-        var result = _types
+        // Arrange
+        var rule = _types
             .That()
             .AreInterfaces()
             .Should()
-            .HaveNameStartingWith("I")
-            .GetResult();
+            .HaveNameStartingWith("I");
 
+        // Act
+        var result = rule.GetResult();
+
+        // Assert
         Assert.True(result.IsSuccessful, result.GetFailingTypes());
     }
 }
