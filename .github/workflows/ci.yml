@@ -9,35 +9,59 @@ on:
 jobs:
     build:
         runs-on: ubuntu-latest
-        
+
         steps:
         - name: Checkout code
           uses: actions/checkout@v5
-            
+
         - name: Setup .NET
           uses: actions/setup-dotnet@v5
           with:
             dotnet-version: '10.0.x'
-                
+
         - name: Restore dependencies
           run: dotnet restore
-            
+
         - name: Build
           run: dotnet build --no-restore --configuration Release
-            
-        - name: Run tests with coverage
-          run: dotnet test --configuration Release --no-build --logger "trx" --filter "Category!=LongRunning" /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
-          
+
+        - name: Install dotnet-coverage
+          run: dotnet tool install --global dotnet-coverage
+
+        - name: Run unit tests
+          run: >
+            dotnet-coverage collect
+            --output TestResults/unit.cobertura.xml
+            --output-format cobertura
+            "dotnet run --project tests/Api.Project.Template.Tests.Unit
+            --configuration Release --no-build
+            -- -trx TestResults/unit.trx"
+
+        - name: Run architecture tests
+          run: >
+            dotnet run --project tests/Api.Project.Template.Tests.Architecture
+            --configuration Release --no-build
+            -- -trx TestResults/architecture.trx
+
+        - name: Run integration tests
+          run: >
+            dotnet-coverage collect
+            --output TestResults/integration.cobertura.xml
+            --output-format cobertura
+            "dotnet run --project tests/Api.Project.Template.Tests.Integration
+            --configuration Release --no-build
+            -- -trx TestResults/integration.trx"
+
         - name: Publish test results
           uses: EnricoMi/publish-unit-test-result-action@v2
           if: always()
           with:
-            files: '**/TestResults/**/*.trx'
+            files: TestResults/**/*.trx
 
         - name: Generate coverage report
           uses: danielpalme/ReportGenerator-GitHub-Action@5.2.4
-          with: 
-            reports: '**/coverage.cobertura.xml'
+          with:
+            reports: 'TestResults/*.cobertura.xml'
             targetdir: 'CoverageReport'
             reporttypes: 'MarkdownSummaryGitHub'
             verbosity: 'Info'
