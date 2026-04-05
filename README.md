@@ -1,6 +1,6 @@
 # A .NET Project Template
 
-[![.NET](https://github.com/ovation22/Api.Project.Template/actions/workflows/dotnet.yml/badge.svg)](https://github.com/ovation22/Api.Project.Template/actions/workflows/dotnet.yml)
+[![CI](https://github.com/ovation22/Api.Project.Template/actions/workflows/ci.yml/badge.svg)](https://github.com/ovation22/Api.Project.Template/actions/workflows/ci.yml)
 
 A production-ready template for building .NET Web API projects following Clean Architecture, CQRS, and test-driven development principles.
 
