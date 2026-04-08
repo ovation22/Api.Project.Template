@@ -1,20 +1,26 @@
-﻿using System;
-using Api.Project.Template.Infrastructure.Data;
 using HealthChecks.UI.Client;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Project.Template.Api.Config;
 
 public static class HealthConfig
 {
-    public static void AddHealthCheckConfig(this IServiceCollection services, IConfiguration configuration)
+    public static void AddSqlServerHealthChecks(this IServiceCollection services, IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("ApiProjectTemplate")
+            ?? throw new InvalidOperationException("Connection string 'ApiProjectTemplate' is not configured.");
+
         services.AddHealthChecks()
-            .AddDbContextCheck<ApiProjectTemplateContext>()
-            .AddSqlServer(configuration.GetConnectionString("ApiProjectTemplate") ?? throw new InvalidOperationException());
+            .AddSqlServer(connectionString);
+    }
+
+    public static void AddPostgreSqlHealthChecks(this IServiceCollection services, IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString("ApiProjectTemplate")
+            ?? throw new InvalidOperationException("Connection string 'ApiProjectTemplate' is not configured.");
+
+        services.AddHealthChecks()
+            .AddNpgSql(connectionString);
     }
 
     public static void UseHealthCheckConfig(this WebApplication app)

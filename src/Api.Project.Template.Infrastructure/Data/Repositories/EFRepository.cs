@@ -5,7 +5,6 @@ using Api.Project.Template.Application.Common.Specifications;
 using Ardalis.Specification;
 using Ardalis.Specification.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using System.Linq.Expressions;
 
 namespace Api.Project.Template.Infrastructure.Data.Repositories;
