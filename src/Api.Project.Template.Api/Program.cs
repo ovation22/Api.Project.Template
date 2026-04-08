@@ -2,7 +2,6 @@ using Api.Project.Template.Api.Config;
 using Api.Project.Template.Api.Middleware;
 using Api.Project.Template.Application;
 using Api.Project.Template.Infrastructure;
-using Api.Project.Template.Infrastructure.Data;
 using Api.Project.Template.ServiceDefaults;
 using Scalar.AspNetCore;
 using Serilog;
@@ -32,10 +31,20 @@ public class Program
                 options.LowercaseUrls = true;
             });
 
-            builder.AddSqlServerDbContext<ApiProjectTemplateContext>("ApiProjectTemplate");
+            var isPostgreSql = builder.Configuration["DatabaseProvider"] == "PostgreSQL";
+
+            if (isPostgreSql)
+                builder.AddPostgreSqlDatabaseContext();
+            else
+                builder.AddSqlServerDatabaseContext();
 
             builder.Services.AddInfrastructure();
             builder.Services.AddApplication();
+
+            if (isPostgreSql)
+                builder.Services.AddPostgreSqlHealthChecks(builder.Configuration);
+            else
+                builder.Services.AddSqlServerHealthChecks(builder.Configuration);
 
             builder.Services.AddHttpContextAccessor();
 
@@ -56,33 +65,7 @@ public class Program
 
             var app = builder.Build();
 
-            // Ensure the database is created and seed data is applied on first run.
-            // EnsureCreated() is used here for simplicity — it creates the schema from the
-            // current model if the database does not exist, and applies HasData() seed data.
-            // NOTE: EnsureCreated() does NOT apply EF migrations. It is not compatible with
-            // Migration-based workflows. When you are ready to switch to migrations:
-            //
-            //   1. Remove the EnsureCreated() block below.
-            //   2. Generate an initial migration:
-            //        dotnet ef migrations add InitialCreate \
-            //          --project src/Api.Project.Template.Infrastructure \
-            //          --startup-project src/Api.Project.Template.Api
-            //   3. Replace EnsureCreated() with MigrateAsync():
-            //        await db.Database.MigrateAsync();
-            using (var scope = app.Services.CreateScope())
-            {
-                var services = scope.ServiceProvider;
-                try
-                {
-                    var db = services.GetRequiredService<ApiProjectTemplateContext>();
-                    db.Database.EnsureCreated();
-                }
-                catch (Exception ex)
-                {
-                    Log.Fatal(ex, "An error occurred while creating the database.");
-                    throw;
-                }
-            }
+            app.EnsureDatabaseCreated();
 
             app.MapDefaultEndpoints();
 

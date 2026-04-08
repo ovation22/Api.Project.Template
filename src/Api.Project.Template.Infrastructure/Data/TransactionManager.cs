@@ -1,14 +1,12 @@
 using Api.Project.Template.Application.Abstractions.Data;
 using Api.Project.Template.Application.Abstractions.Logging;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Extensions.Logging;
 
 namespace Api.Project.Template.Infrastructure.Data;
 
-public class TransactionManager(DbContext dbContext, ILoggerAdapter<TransactionManager> logger) : ITransactionManager
+public class TransactionManager(ApiProjectTemplateContext dbContext, ILoggerAdapter<TransactionManager> logger) : ITransactionManager
 {
-    private readonly DbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    private readonly ApiProjectTemplateContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly ILoggerAdapter<TransactionManager> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private IDbContextTransaction? _currentTransaction;
 

@@ -423,7 +423,9 @@ The [Richardson Maturity Model](https://martinfowler.com/articles/richardsonMatu
 - [x] Clean Architecture layering
 - [x] CQRS with MediatR
 - [x] Generic Repository pattern
-- [x] Entity Framework Core with SQL Server
+- [x] Entity Framework Core
+  - [x] with SQL Server
+  - [x] with PostgreSQL
 - [x] Specifications (Ardalis.Specification)
 - [x] Seed data
 - [x] Structured logging with Serilog
