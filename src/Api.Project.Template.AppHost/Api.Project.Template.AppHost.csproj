@@ -9,12 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.Azure.ServiceBus" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" />
     <PackageReference Include="Aspire.Hosting.SqlServer" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Api.Project.Template.Api\Api.Project.Template.Api.csproj" />
+    <ProjectReference Include="..\Api.Project.Template.Worker\Api.Project.Template.Worker.csproj" />
   </ItemGroup>
 
 </Project>

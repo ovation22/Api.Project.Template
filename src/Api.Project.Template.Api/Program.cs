@@ -38,6 +38,13 @@ public class Program
             else
                 builder.AddSqlServerDatabaseContext();
 
+            var messagingProvider = builder.Configuration["MessagingProvider"] ?? "None";
+
+            if (messagingProvider == "RabbitMq")
+                builder.AddRabbitMqMessageBus();
+            else if (messagingProvider == "ServiceBus")
+                builder.AddServiceBusMessageBus();
+
             builder.Services.AddInfrastructure();
             builder.Services.AddApplication();
 

@@ -13,6 +13,9 @@ public interface ILoggerAdapter<T>
     void LogInformation<T0>(string message, T0 arg0);
     void LogInformation<T0, T1>(string message, T0 arg0, T1 arg1);
     void LogInformation<T0, T1, T2>(string message, T0 arg0, T1 arg1, T2 arg2);
+    void LogInformation<T0, T1, T2, T3>(string message, T0 arg0, T1 arg1, T2 arg2, T3 arg3);
+    void LogInformation<T0, T1, T2, T3, T4>(string message, T0 arg0, T1 arg1, T2 arg2, T3 arg3, T4 arg4);
+    void LogInformation<T0, T1, T2, T3, T4, T5>(string message, T0 arg0, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5);
 
     void LogWarning(string message);
     void LogWarning<T0>(string message, T0 arg0);

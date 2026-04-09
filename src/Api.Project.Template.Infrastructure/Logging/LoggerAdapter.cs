@@ -77,6 +77,30 @@ public class LoggerAdapter<T> : ILoggerAdapter<T>
         }
     }
 
+    public void LogInformation<T0, T1, T2, T3>(string message, T0 arg0, T1 arg1, T2 arg2, T3 arg3)
+    {
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(message, arg0, arg1, arg2, arg3);
+        }
+    }
+
+    public void LogInformation<T0, T1, T2, T3, T4>(string message, T0 arg0, T1 arg1, T2 arg2, T3 arg3, T4 arg4)
+    {
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(message, arg0, arg1, arg2, arg3, arg4);
+        }
+    }
+
+    public void LogInformation<T0, T1, T2, T3, T4, T5>(string message, T0 arg0, T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
+    {
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(message, arg0, arg1, arg2, arg3, arg4, arg5);
+        }
+    }
+
     public void LogWarning(string message)
     {
         if (_logger.IsEnabled(LogLevel.Warning))
