@@ -97,38 +97,6 @@ public interface IRepository
     Task<IEnumerable<T>> GetAllAsync<T>(CancellationToken cancellationToken = default) where T : class;
 
     /// <summary>
-    /// Returns an asynchronous sequence of entities that match the provided specification.
-    /// </summary>
-    /// <typeparam name="T">The entity type.</typeparam>
-    /// <param name="specification">Specification that defines filters, includes and ordering.</param>
-    /// <returns>An <see cref="IAsyncEnumerable{T}"/> streaming matching entities.</returns>
-    IAsyncEnumerable<T> AsAsyncEnumerable<T>(ISpecification<T> specification) where T : class;
-
-    /// <summary>
-    /// Returns an asynchronous sequence of entities that match the provided predicate expression.
-    /// </summary>
-    /// <typeparam name="T">The entity type.</typeparam>
-    /// <param name="expression">Predicate expression to filter entities.</param>
-    /// <returns>An <see cref="IAsyncEnumerable{T}"/> streaming matching entities.</returns>
-    IAsyncEnumerable<T> AsAsyncEnumerable<T>(Expression<Func<T, bool>> expression) where T : class;
-
-    /// <summary>
-    /// Returns an <see cref="IEnumerable{T}"/> of entities that match the provided specification.
-    /// </summary>
-    /// <typeparam name="T">The entity type.</typeparam>
-    /// <param name="specification">Specification that defines filters, includes and ordering.</param>
-    /// <returns>An <see cref="IEnumerable{T}"/> with matching entities.</returns>
-    IEnumerable<T> AsEnumerable<T>(ISpecification<T> specification) where T : class;
-
-    /// <summary>
-    /// Returns an <see cref="IEnumerable{T}"/> of entities that match the provided predicate expression.
-    /// </summary>
-    /// <typeparam name="T">The entity type.</typeparam>
-    /// <param name="expression">Predicate expression to filter entities.</param>
-    /// <returns>An <see cref="IEnumerable{T}"/> with matching entities.</returns>
-    IEnumerable<T> AsEnumerable<T>(Expression<Func<T, bool>> expression) where T : class;
-
-    /// <summary>
     /// Lists entities matching the given expression.
     /// </summary>
     /// <typeparam name="T">The type of the entity.</typeparam>

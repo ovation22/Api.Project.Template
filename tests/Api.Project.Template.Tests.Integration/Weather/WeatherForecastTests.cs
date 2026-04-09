@@ -29,11 +29,8 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
         db.Database.EnsureCreated();
     }
 
-    // ---------------------------------------------------------------------------
-    // Baseline
-    // ---------------------------------------------------------------------------
-
     [Fact]
+    [Trait("Category", "Baseline")]
     public async Task Get_ReturnsOkStatusCode()
     {
         // Arrange
@@ -46,6 +43,7 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    [Trait("Category", "Baseline")]
     public async Task Get_ReturnsAllSeededForecasts()
     {
         // Arrange
@@ -63,6 +61,7 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    [Trait("Category", "Baseline")]
     public async Task Get_ReturnsForecastsWithCorrectShape()
     {
         // Arrange
@@ -83,11 +82,8 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
         });
     }
 
-    // ---------------------------------------------------------------------------
-    // Pagination
-    // ---------------------------------------------------------------------------
-
     [Fact]
+    [Trait("Category", "Pagination")]
     public async Task Get_Paginated_ReturnsCorrectPageSize()
     {
         // Arrange
@@ -102,11 +98,8 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
         result.Data.Should().HaveCount(10);
     }
 
-    // ---------------------------------------------------------------------------
-    // Single-field filters
-    // ---------------------------------------------------------------------------
-
     [Fact]
+    [Trait("Category", "Filters")]
     public async Task Get_FilterByDate_GreaterThan_ReturnsOnlyMatchingForecasts()
     {
         // Arrange
@@ -123,6 +116,7 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    [Trait("Category", "Filters")]
     public async Task Get_FilterByDate_GreaterThan_FiltersOutEarlierRecords()
     {
         // Arrange
@@ -139,6 +133,7 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    [Trait("Category", "Filters")]
     public async Task Get_FilterByTemperatureC_GreaterThan_ReturnsOnlyMatchingForecasts()
     {
         // Arrange
@@ -154,6 +149,7 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    [Trait("Category", "Filters")]
     public async Task Get_FilterByTemperatureC_LessThan_ReturnsOnlyMatchingForecasts()
     {
         // Arrange
@@ -170,6 +166,7 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    [Trait("Category", "Filters")]
     public async Task Get_FilterBySummary_Contains_ReturnsOnlyMatchingForecasts()
     {
         // Arrange
@@ -187,6 +184,7 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
     }
 
     [Fact]
+    [Trait("Category", "Filters")]
     public async Task Get_FilterBySummary_Equals_ReturnsOnlyMatchingForecasts()
     {
         // Arrange
@@ -202,11 +200,8 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
         result.Data.Should().AllSatisfy(f => f.Summary.Should().Be("Warm"));
     }
 
-    // ---------------------------------------------------------------------------
-    // Combined filters — AND
-    // ---------------------------------------------------------------------------
-
     [Fact]
+    [Trait("Category", "Filters")]
     public async Task Get_FilterAndTemperatureCAndSummary_ReturnsOnlyRecordsSatisfyingBothConditions()
     {
         // Arrange
@@ -229,11 +224,8 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
         });
     }
 
-    // ---------------------------------------------------------------------------
-    // Combined filters — OR
-    // ---------------------------------------------------------------------------
-
     [Fact]
+    [Trait("Category", "Filters")]
     public async Task Get_FilterOrTemperatureCOrSummary_ReturnsRecordsSatisfyingEitherCondition()
     {
         // Arrange

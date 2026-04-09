@@ -93,34 +93,6 @@ public abstract class EFRepository(DbContext dbContext, ILoggerAdapter<EFReposit
     }
 
     /// <inheritdoc />
-    public IAsyncEnumerable<T> AsAsyncEnumerable<T>(ISpecification<T> specification) where T : class
-    {
-        var query = ApplySpecification(specification);
-
-        return query.AsAsyncEnumerable();
-    }
-
-    /// <inheritdoc />
-    public IAsyncEnumerable<T> AsAsyncEnumerable<T>(Expression<Func<T, bool>> expression) where T : class
-    {
-        return dbContext.Set<T>().AsQueryable().Where(expression).AsAsyncEnumerable();
-    }
-
-    /// <inheritdoc />
-    public IEnumerable<T> AsEnumerable<T>(ISpecification<T> specification) where T : class
-    {
-        var query = ApplySpecification(specification);
-
-        return query.AsEnumerable();
-    }
-
-    /// <inheritdoc />
-    public IEnumerable<T> AsEnumerable<T>(Expression<Func<T, bool>> expression) where T : class
-    {
-        return dbContext.Set<T>().AsQueryable().Where(expression).AsEnumerable();
-    }
-
-    /// <inheritdoc />
     public virtual async Task<List<T>> ListAsync<T>(Expression<Func<T, bool>> expression,
         CancellationToken cancellationToken = default) where T : class
     {
