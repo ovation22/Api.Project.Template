@@ -12,7 +12,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
-        services.AddScoped<IRepository, ContextRepository>();
+        services.AddScoped<IRepository, ApiProjectTemplateContextRepository>();
         services.AddScoped<ITransactionManager, TransactionManager>();
         services.AddSingleton(typeof(ILoggerAdapter<>), typeof(LoggerAdapter<>));
 

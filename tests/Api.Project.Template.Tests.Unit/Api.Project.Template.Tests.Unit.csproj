@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Moq" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio">
@@ -21,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Api.Project.Template.Application\Api.Project.Template.Application.csproj" />
     <ProjectReference Include="..\..\src\Api.Project.Template.Domain\Api.Project.Template.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Api.Project.Template.Infrastructure\Api.Project.Template.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

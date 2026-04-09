@@ -1,7 +1,4 @@
 ﻿using Api.Project.Template.Application.Common.Pagination;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Api.Project.Template.Application.Common.Specifications;
 

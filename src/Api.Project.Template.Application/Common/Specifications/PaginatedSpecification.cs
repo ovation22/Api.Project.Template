@@ -1,12 +1,8 @@
 ﻿using Api.Project.Template.Application.Common.Pagination;
 using Ardalis.Specification;
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Text;
 
 namespace Api.Project.Template.Application.Common.Specifications;
 
@@ -14,9 +10,6 @@ namespace Api.Project.Template.Application.Common.Specifications;
 /// Represents a paginated specification for entities.
 /// </summary>
 /// <typeparam name="T">The type of the entity.</typeparam>
-/// <remarks>
-/// Initializes a new instance of the <see cref="PaginatedSpecification{T}"/> class.
-/// </remarks>
 /// <param name="pageNumber">The page number.</param>
 /// <param name="pageSize">The page size.</param>
 public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : Specification<T>, IPaginatedSpecification<T>
@@ -153,7 +146,6 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
     /// <summary>
     /// Combines multiple filter expressions with an OR operator.
     /// </summary>
-    /// <typeparam name="T">The type of entity.</typeparam>
     /// <param name="filterExpressions">The filter expressions to combine.</param>
     /// <returns>The combined filter expression with an OR operator.</returns>
     private static Expression<Func<T, bool>> CombineFilterExpressionsWithOr(IEnumerable<Expression<Func<T, bool>>> filterExpressions)
@@ -171,8 +163,11 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
     }
 
     /// <summary>
-    /// ExpressionVisitor that replaces one parameter expression with another.
+    /// Converts a string value to the specified target type, with special handling for common date/time and GUID types.
     /// </summary>
+    /// <param name="value">The string value to convert.</param>
+    /// <param name="targetType">The target type to convert to.</param>
+    /// <returns>The converted value.</returns>
     private static object ConvertValue(string value, Type targetType)
     {
         if (targetType == typeof(DateOnly))
@@ -186,6 +181,9 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
         return Convert.ChangeType(value, targetType);
     }
 
+    /// <summary>
+    /// Replaces one parameter expression with another within an expression tree.
+    /// </summary>
     private sealed class ParameterReplacer(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
     {
         protected override Expression VisitParameter(ParameterExpression node)
@@ -313,19 +311,27 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
 }
 
 /// <summary>
-/// Paginated specification that also projects to TResult.
-/// Copy of helpers from the non-projected PaginatedSpecification to keep behavior consistent.
+/// Represents a paginated specification for entities that projects results to <typeparamref name="TResult"/>.
 /// </summary>
+/// <typeparam name="T">The type of the entity.</typeparam>
+/// <typeparam name="TResult">The type of the projected result.</typeparam>
+/// <param name="pageNumber">The page number.</param>
+/// <param name="pageSize">The page size.</param>
 public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pageSize)
     : Specification<T, TResult>, IPaginatedSpecification<T, TResult>
     where T : class
 {
+    /// <inheritdoc />
     public int PageNumber { get; } = pageNumber;
+
+    /// <inheritdoc />
     public int PageSize { get; } = pageSize;
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.IsEntityProperty(string)"/>
     private static bool IsEntityProperty(string propertyName)
         => GetPropertyExpression(propertyName) != null;
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.GetPropertyExpression(string)"/>
     private static PropertyInfo? GetPropertyExpression(string propertyName)
     {
         var properties = propertyName.Split('.');
@@ -346,6 +352,7 @@ public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pag
         return property;
     }
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.BuildFilterExpression(string, Filter, Dictionary{string,string})"/>
     private static Expression<Func<T, bool>> BuildFilterExpression(string filterBy, Filter filter, Dictionary<string, string> propertyMappings)
     {
         var parameter = Expression.Parameter(typeof(T), "x");
@@ -416,6 +423,7 @@ public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pag
         return Expression.Lambda<Func<T, bool>>(body, parameter);
     }
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.ConvertValue(string, Type)"/>
     private static object ConvertValue(string value, Type targetType)
     {
         if (targetType == typeof(DateOnly))
@@ -429,6 +437,7 @@ public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pag
         return Convert.ChangeType(value, targetType);
     }
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.CreateOrderByExpression(string)"/>
     private static Expression<Func<T, object>> CreateOrderByExpression(string propertyPath)
     {
         var parameter = Expression.Parameter(typeof(T), "x");
@@ -439,6 +448,7 @@ public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pag
         return Expression.Lambda<Func<T, object>>(propertyAsObject, parameter);
     }
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.ApplySorting(string, SortDirection, Dictionary{string,string})"/>
     protected void ApplySorting(string sortBy, SortDirection sortDirection, Dictionary<string, string> propertyMappings)
     {
         if (propertyMappings.TryGetValue(sortBy, out var mapped))
@@ -463,6 +473,7 @@ public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pag
         }
     }
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.CombineFilterExpressionsWithOr(IEnumerable{Expression{Func{T,bool}}})"/>
     private static Expression<Func<T, bool>> CombineFilterExpressionsWithOr(IEnumerable<Expression<Func<T, bool>>> filterExpressions)
     {
         var parameter = Expression.Parameter(typeof(T), "x");
@@ -474,6 +485,7 @@ public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pag
         return Expression.Lambda<Func<T, bool>>(combined, parameter);
     }
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.ApplyOrFilters(Dictionary{string,Filter}, Dictionary{string,string})"/>
     protected void ApplyOrFilters(Dictionary<string, Filter> filters, Dictionary<string, string> propertyMappings)
     {
         var filterList = filters.ToList();
@@ -482,12 +494,14 @@ public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pag
         Query.Where(combinedFilterExpression);
     }
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.ApplyAndFilters(Dictionary{string,Filter}, Dictionary{string,string})"/>
     protected void ApplyAndFilters(Dictionary<string, Filter> filters, Dictionary<string, string> propertyMappings)
     {
         foreach (var filterExpression in filters.Select(filter => BuildFilterExpression(filter.Key, filter.Value, propertyMappings)))
             Query.Where(filterExpression);
     }
 
+    /// <inheritdoc cref="PaginatedSpecification{T}.ParameterReplacer"/>
     private sealed class ParameterReplacer(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
     {
         protected override Expression VisitParameter(ParameterExpression node) => node == from ? to : base.VisitParameter(node);
