@@ -11,6 +11,7 @@
     <Project Path="src/Api.Project.Template.Domain/Api.Project.Template.Domain.csproj" />
     <Project Path="src/Api.Project.Template.Infrastructure/Api.Project.Template.Infrastructure.csproj" Id="599fb0ef-433a-4984-b541-1a2dfe81cee5" />
     <Project Path="src/Api.Project.Template.ServiceDefaults/Api.Project.Template.ServiceDefaults.csproj" />
+    <Project Path="src/Api.Project.Template.Worker/Api.Project.Template.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Api.Project.Template.Tests.Architecture/Api.Project.Template.Tests.Architecture.csproj" Id="21f69fb6-32cb-4c08-964f-96e91791c92f" />

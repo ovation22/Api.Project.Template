@@ -5,6 +5,7 @@ using Api.Project.Template.Application.Features.Weather.Queries;
 using Api.Project.Template.Application.Features.Weather.Queries.Handlers;
 using Api.Project.Template.Domain.Entities;
 using FluentAssertions;
+using MediatR;
 using Moq;
 
 namespace Api.Project.Template.Tests.Unit.Features.Weather.Queries;
@@ -12,12 +13,14 @@ namespace Api.Project.Template.Tests.Unit.Features.Weather.Queries;
 public class GetWeatherForecastsQueryHandlerTests
 {
     private readonly Mock<IRepository> _repositoryMock;
+    private readonly Mock<IPublisher> _publisherMock;
     private readonly GetWeatherForecastsQueryHandler _handler;
 
     public GetWeatherForecastsQueryHandlerTests()
     {
         _repositoryMock = new Mock<IRepository>();
-        _handler = new GetWeatherForecastsQueryHandler(_repositoryMock.Object);
+        _publisherMock = new Mock<IPublisher>();
+        _handler = new GetWeatherForecastsQueryHandler(_repositoryMock.Object, _publisherMock.Object);
     }
 
     [Fact]
