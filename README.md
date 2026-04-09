@@ -12,6 +12,7 @@ A production-ready template for building .NET Web API projects following Clean A
 - [Getting Started](#getting-started)
 - [Running the Application](#running-the-application)
 - [Database](#database)
+- [Messaging](#messaging)
 - [Solution Structure](#solution-structure)
 - [Architecture](#architecture)
 - [Patterns and Practices](#patterns-and-practices)
@@ -116,6 +117,95 @@ From this point forward, schema changes are made by adding new migrations rather
 
 ---
 
+## Messaging
+
+Messaging is provider-switchable via the `MessagingProvider` setting, following the same pattern as `DatabaseProvider`. Set it in `src/Api.Project.Template.AppHost/appsettings.json`:
+
+| Value | Broker | Infrastructure |
+|---|---|---|
+| `None` | Disabled | No broker started or registered |
+| `RabbitMq` | RabbitMQ | Docker container via Aspire, management UI at port 15672 |
+| `ServiceBus` | Azure Service Bus | Azure resource provisioned via Aspire |
+
+```json
+{
+  "MessagingProvider": "RabbitMq"
+}
+```
+
+Changing this single value in AppHost `appsettings.json` switches the broker for all projects (API and Worker). The same setting is passed to each project as an environment variable by the Aspire orchestrator.
+
+### Architecture
+
+The message bus abstraction spans three layers:
+
+- **Application** — `IMessagePublisher`, `IMessageProcessor<T>`, `MessageProcessingResult`, `MessageContext` — no broker details
+- **Infrastructure** — `RabbitMqMessagePublisher`, `ServiceBusMessagePublisher`, `RoutingMessagePublisher` (decorator), broker adapters, `MessageConsumerWorker<TMessage, TProcessor>` — all broker details live here
+- **Worker** — `WeatherRequestProcessor`, `Worker` — consumes messages; depends only on Application abstractions
+
+### Publishing — Domain Events via MediatR
+
+Messages are published from the Application layer using the **domain event pattern**:
+
+1. A MediatR handler raises an `INotification` after completing its use case
+2. An `INotificationHandler<T>` receives it and calls `IMessagePublisher.PublishAsync`
+3. `RoutingMessagePublisher` resolves the destination from `MessageBus:Routing:Routes` config and delegates to the active broker publisher
+
+```
+Handler → IPublisher.Publish(WeatherForecastRequestedEvent)
+        → WeatherForecastRequestedEventHandler
+        → IMessagePublisher.PublishAsync
+        → RoutingMessagePublisher → RabbitMqMessagePublisher / ServiceBusMessagePublisher
+```
+
+### Routing Configuration
+
+Routes are configured per message type in `appsettings.json`. The key is `typeof(T).Name` of the published event. Both `RoutingKey` (RabbitMQ) and `Subject` (Service Bus) coexist so you can switch providers without changing config:
+
+```json
+"MessageBus": {
+  "Routing": {
+    "Provider": "Auto",
+    "DefaultDestination": "weather-requests",
+    "Routes": {
+      "WeatherForecastRequestedEvent": {
+        "Destination": "weather-requests",
+        "RoutingKey": "WeatherRequested",
+        "Subject": "WeatherRequested"
+      }
+    }
+  }
+}
+```
+
+### Consuming — Worker Service
+
+`Api.Project.Template.Worker` is a .NET Worker Service that runs alongside the API. Each consumer is registered with `AddMessageConsumer<TMessage, TProcessor, TWorker>()`:
+
+- **`WeatherRequested`** — message shape, must match the serialized form of the published event
+- **`WeatherRequestProcessor`** — implements `IMessageProcessor<WeatherRequested>`, returns `MessageProcessingResult.Succeeded()` / `Failed(reason, requeue)` to control ACK/NACK/dead-letter behavior
+- **`Worker`** — named `BackgroundService` subclass of `MessageConsumerWorker<TMessage, TProcessor>`
+
+Consumer queue and broker-specific settings live in the Worker's `appsettings.json`:
+
+```json
+"MessageBus": {
+  "Consumer": {
+    "Queue": "weather-requests",
+    "Concurrency": 5,
+    "MaxRetries": 3,
+    "PrefetchCount": 10
+  },
+  "RabbitMq": {
+    "Exchange": "apiprojecttemplate.events",
+    "RoutingKey": "WeatherRequested",
+    "ExchangeType": "topic"
+  }
+}
+```
+
+---
+
 ## Solution Structure
 
 ```
@@ -123,7 +213,8 @@ src/
 ├── Api.Project.Template.Api            # Entry point — controllers, middleware, config
 ├── Api.Project.Template.Application    # Business logic — CQRS, services, abstractions
 ├── Api.Project.Template.Domain         # Core — entities, domain rules, value objects
-├── Api.Project.Template.Infrastructure # Data access — EF Core, repositories, logging
+├── Api.Project.Template.Infrastructure # Data access, messaging — EF Core, repositories, broker adapters
+├── Api.Project.Template.Worker         # Background worker — message consumers
 ├── Api.Project.Template.AppHost        # .NET Aspire orchestrator
 └── Api.Project.Template.ServiceDefaults # Shared Aspire configuration
 
@@ -426,6 +517,11 @@ The [Richardson Maturity Model](https://martinfowler.com/articles/richardsonMatu
 - [x] Entity Framework Core
   - [x] with SQL Server
   - [x] with PostgreSQL
+- [x] Messaging (provider-switchable via `MessagingProvider`)
+  - [x] RabbitMQ
+  - [x] Azure Service Bus
+  - [x] Domain event pattern (MediatR notifications → message bus)
+  - [x] Worker Service consumer (`Api.Project.Template.Worker`)
 - [x] Specifications (Ardalis.Specification)
 - [x] Seed data
 - [x] Structured logging with Serilog
