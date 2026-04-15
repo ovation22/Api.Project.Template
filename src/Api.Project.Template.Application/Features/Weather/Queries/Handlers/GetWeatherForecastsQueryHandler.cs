@@ -2,19 +2,20 @@ using Api.Project.Template.Application.Abstractions;
 using Api.Project.Template.Application.Common.Pagination;
 using Api.Project.Template.Application.Features.Weather.Events;
 using Api.Project.Template.Application.Features.Weather.Specifications;
+using Ardalis.Result;
 using MediatR;
 
 namespace Api.Project.Template.Application.Features.Weather.Queries.Handlers;
 
 public class GetWeatherForecastsQueryHandler(IRepository repository, IPublisher publisher)
-    : IRequestHandler<GetWeatherForecastsQuery, PagedList<GetWeatherForecastsResponse>>
+    : IRequestHandler<GetWeatherForecastsQuery, Result<PagedList<GetWeatherForecastsResponse>>>
 {
-    public async Task<PagedList<GetWeatherForecastsResponse>> Handle(
+    public async Task<Result<PagedList<GetWeatherForecastsResponse>>> Handle(
         GetWeatherForecastsQuery request,
         CancellationToken cancellationToken)
     {
         var spec = new WeatherForecastFilterSpecification(request.PaginationRequest);
-        var result = await repository.ListAsync(spec, cancellationToken);
+        var forecasts = await repository.ListAsync(spec, cancellationToken);
 
         // Contrived example to demonstrate MediatR's publish/subscribe capabilities.
         // In a real application, you might want to publish an event when a new weather forecast is created or updated,
@@ -26,6 +27,6 @@ public class GetWeatherForecastsQueryHandler(IRepository repository, IPublisher 
                 DateTimeOffset.UtcNow),
             cancellationToken);
 
-        return result;
+        return Result.Success(forecasts);
     }
 }

@@ -4,6 +4,7 @@ using Api.Project.Template.Application.Common.Specifications;
 using Api.Project.Template.Application.Features.Weather.Queries;
 using Api.Project.Template.Application.Features.Weather.Queries.Handlers;
 using Api.Project.Template.Domain.Entities;
+using Ardalis.Result;
 using FluentAssertions;
 using MediatR;
 using Moq;
@@ -45,9 +46,10 @@ public class GetWeatherForecastsQueryHandlerTests
         var result = await _handler.Handle(new GetWeatherForecastsQuery(request), CancellationToken.None);
 
         // Assert
-        result.Data.Should().HaveCount(2);
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Data.Should().HaveCount(2);
 
-        var data = result.Data.ToList();
+        var data = result.Value.Data.ToList();
         data[0].Date.Should().Be(new DateOnly(2025, 6, 1));
         data[0].TemperatureC.Should().Be(20);
         data[0].TemperatureF.Should().Be(68);
@@ -75,7 +77,8 @@ public class GetWeatherForecastsQueryHandlerTests
         var result = await _handler.Handle(new GetWeatherForecastsQuery(request), CancellationToken.None);
 
         // Assert
-        result.Data.Should().BeEmpty();
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Data.Should().BeEmpty();
     }
 
     [Fact]
