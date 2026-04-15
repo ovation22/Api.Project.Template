@@ -385,6 +385,38 @@ This template ships with a generic `IRepository`. As your domain grows, consider
 
 `ILoggerAdapter<T>` wraps `ILogger<T>` and is defined in Application. This allows handlers and services to log without taking a hard dependency on `Microsoft.Extensions.Logging`, keeping Application infrastructure-free and making logging easy to mock in tests.
 
+### Result Pattern
+
+Handlers return `Result<T>` (from `Ardalis.Result`) instead of throwing exceptions for expected failure cases. This makes the handler's contract explicit — callers know a failure is possible without relying on exception handling for control flow.
+
+| Result type | HTTP mapping (via `ToActionResult`) |
+|---|---|
+| `Result.Success(value)` | `200 OK` |
+| `Result.NotFound()` | `404 Not Found` |
+| `Result.Invalid(errors)` | `400 Bad Request` |
+| `Result.Forbidden()` | `403 Forbidden` |
+| `Result.Error(message)` | `500 Internal Server Error` |
+
+Controllers call `this.ToActionResult(result)` (from `Ardalis.Result.AspNetCore`) which maps the result status to the correct HTTP response automatically — no manual `if/switch` on status codes needed.
+
+```csharp
+// Handler
+public async Task<Result<PagedList<GetWeatherForecastsResponse>>> Handle(...)
+{
+    var forecasts = await repository.ListAsync(spec, cancellationToken);
+    return Result.Success(forecasts);
+}
+
+// Controller
+public async Task<ActionResult<PagedList<GetWeatherForecastsResponse>>> Filter(...)
+{
+    var result = await sender.Send(new GetWeatherForecastsQuery(request), cancellationToken);
+    return this.ToActionResult(result);
+}
+```
+
+Unhandled exceptions (infrastructure failures, unexpected errors) still propagate to `ExceptionHandlingMiddleware`, which returns a `500 ProblemDetails` response. The Result pattern handles *expected* failures; the middleware handles *unexpected* ones.
+
 ### Dependency Injection
 
 Services are registered in extension methods:
@@ -523,6 +555,7 @@ The [Richardson Maturity Model](https://martinfowler.com/articles/richardsonMatu
   - [x] Domain event pattern (MediatR notifications → message bus)
   - [x] Worker Service consumer (`Api.Project.Template.Worker`)
 - [x] Specifications (Ardalis.Specification)
+- [x] Result pattern (Ardalis.Result)
 - [x] Seed data
 - [x] Structured logging with Serilog
 - [x] Global exception handling middleware
@@ -537,5 +570,4 @@ The [Richardson Maturity Model](https://martinfowler.com/articles/richardsonMatu
 ### Planned
 
 - [ ] Guard clauses
-- [ ] Result pattern
 - [ ] HTTP client (typed, with resilience)

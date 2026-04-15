@@ -13,6 +13,8 @@
     <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.2.1" />
     <PackageVersion Include="Aspire.RabbitMQ.Client" Version="13.2.1" />
     <!-- API -->
+    <PackageVersion Include="Ardalis.Result" Version="9.0.0" />
+    <PackageVersion Include="Ardalis.Result.AspNetCore" Version="9.0.0" />
     <PackageVersion Include="Ardalis.Specification" Version="9.3.1" />
     <PackageVersion Include="AspNetCore.HealthChecks.Npgsql" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />

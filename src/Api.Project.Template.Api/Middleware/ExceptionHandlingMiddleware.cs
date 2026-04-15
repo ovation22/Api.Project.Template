@@ -14,24 +14,6 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILoggerAda
         {
             logger.LogWarning("Request was canceled by the client. Path {path}", context.Request.Path);
         }
-        catch (KeyNotFoundException ex)
-        {
-            logger.LogWarning(ex, "Resource not found. Path {path}", context.Request.Path);
-
-            if (context.Response.HasStarted)
-            {
-                logger.LogWarning("The response has already started, cannot write problem details. Path {path}", context.Request.Path);
-                throw;
-            }
-
-            var problem = Results.Problem(
-                title: "Resource not found.",
-                detail: ex.Message,
-                statusCode: StatusCodes.Status404NotFound
-            );
-
-            await problem.ExecuteAsync(context);
-        }
         catch (Exception ex)
         {
             logger.LogError(ex, "An unhandled exception occurred while processing the request. Path {path}", context.Request.Path);

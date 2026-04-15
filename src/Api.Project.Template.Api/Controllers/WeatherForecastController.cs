@@ -1,6 +1,7 @@
 using Api.Project.Template.Api.Conventions;
 using Api.Project.Template.Application.Common.Pagination;
 using Api.Project.Template.Application.Features.Weather.Queries;
+using Ardalis.Result.AspNetCore;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -47,7 +48,8 @@ public class WeatherForecastController(ISender sender) : ControllerBase
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedList<GetWeatherForecastsResponse>>> Filter([FromQuery] PaginationRequest request, CancellationToken cancellationToken)
     {
-        return await sender.Send(new GetWeatherForecastsQuery(request), cancellationToken);
+        var result = await sender.Send(new GetWeatherForecastsQuery(request), cancellationToken);
+        return this.ToActionResult(result);
     }
 
     /// <summary>
