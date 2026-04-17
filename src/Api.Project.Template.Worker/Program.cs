@@ -31,6 +31,11 @@ else if (messagingProvider == "ServiceBus")
     builder.Services.AddMessageBus(builder.Configuration);
     builder.Services.AddMessageConsumer<WeatherRequested, WeatherRequestProcessor, Worker>();
 }
+else if (messagingProvider == "Sqs")
+{
+    builder.Services.AddMessageBus(builder.Configuration);
+    builder.Services.AddMessageConsumer<WeatherRequested, WeatherRequestProcessor, Worker>();
+}
 
 try
 {

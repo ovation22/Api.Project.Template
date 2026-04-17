@@ -45,5 +45,16 @@ else if (messagingProvider == "ServiceBus")
     api.WithReference(serviceBus);
     worker.WithReference(serviceBus);
 }
+else if (messagingProvider == "Sqs")
+{
+    var localstack = builder.AddContainer("sqs", "localstack/localstack", "4.4.0")
+        .WithEnvironment("SERVICES", "sqs,sns")
+        .WithHttpEndpoint(targetPort: 4566, name: "sqs")
+        .WithLifetime(ContainerLifetime.Persistent);
+
+    var sqsEndpoint = localstack.GetEndpoint("sqs");
+    api.WithEnvironment("ConnectionStrings__sqs", sqsEndpoint).WaitFor(localstack);
+    worker.WithEnvironment("ConnectionStrings__sqs", sqsEndpoint).WaitFor(localstack);
+}
 
 builder.Build().Run();

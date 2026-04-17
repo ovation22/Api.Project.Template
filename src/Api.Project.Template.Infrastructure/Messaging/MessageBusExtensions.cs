@@ -3,6 +3,7 @@ using Api.Project.Template.Application.Messaging.Abstractions;
 using Api.Project.Template.Infrastructure.Messaging.Abstractions;
 using Api.Project.Template.Infrastructure.Messaging.RabbitMq;
 using Api.Project.Template.Infrastructure.Messaging.ServiceBus;
+using Api.Project.Template.Infrastructure.Messaging.Sqs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -47,6 +48,10 @@ public static class MessageBusExtensions
         else if (provider == "ServiceBus")
         {
             RegisterServiceBus(services);
+        }
+        else if (provider == "Sqs")
+        {
+            RegisterSqs(services);
         }
 
         return services;
@@ -110,10 +115,11 @@ public static class MessageBusExtensions
         {
             "rabbitmq" => "RabbitMq",
             "servicebus" => "ServiceBus",
+            "sqs" => "Sqs",
             "auto" or null or "" => DetectProvider(configuration),
             _ => throw new InvalidOperationException(
                 $"Invalid MessageBus:Routing:Provider value: '{providerValue}'. " +
-                $"Valid values: 'RabbitMq', 'ServiceBus', 'Auto'")
+                $"Valid values: 'RabbitMq', 'ServiceBus', 'Sqs', 'Auto'")
         };
     }
 
@@ -166,28 +172,48 @@ public static class MessageBusExtensions
     }
 
     /// <summary>
+    /// Registers AWS SQS/SNS implementations for both publisher and consumer.
+    /// Registers IMessagePublisher with RoutingMessagePublisher decorator and IMessageBrokerAdapter with SqsBrokerAdapter.
+    /// </summary>
+    private static void RegisterSqs(IServiceCollection services)
+    {
+        services.AddSingleton<SqsMessagePublisher>();
+        services.AddSingleton<IMessagePublisher>(sp =>
+        {
+            var innerPublisher = sp.GetRequiredService<SqsMessagePublisher>();
+            var routingOptions = sp.GetRequiredService<IOptions<MessageRoutingConfig>>();
+            var logger = sp.GetRequiredService<ILoggerAdapter<RoutingMessagePublisher>>();
+
+            logger.LogInformation("Message bus publisher configured with provider: Sqs");
+
+            return new RoutingMessagePublisher(innerPublisher, routingOptions, logger);
+        });
+
+        services.AddSingleton<IMessageBrokerAdapter, SqsBrokerAdapter>();
+    }
+
+    /// <summary>
     /// Detects available provider by checking for connection strings.
     /// </summary>
     internal static string DetectProvider(IConfiguration configuration)
     {
         var hasRabbitMq = HasRabbitMqConnectionString(configuration);
         var hasServiceBus = HasServiceBusConnectionString(configuration);
-
-        if (hasServiceBus && hasRabbitMq)
-        {
-            // Both available - prefer RabbitMq for local development compatibility
-            return "RabbitMq";
-        }
-
-        if (hasServiceBus)
-            return "ServiceBus";
+        var hasSqs = HasSqsConnectionString(configuration);
 
         if (hasRabbitMq)
             return "RabbitMq";
 
+        if (hasServiceBus)
+            return "ServiceBus";
+
+        if (hasSqs)
+            return "Sqs";
+
         throw new InvalidOperationException(
             "No message broker connection string found. " +
-            "Set ConnectionStrings:messaging (RabbitMQ) or ConnectionStrings:servicebus (Azure Service Bus), " +
+            "Set ConnectionStrings:messaging (RabbitMQ), ConnectionStrings:servicebus (Azure Service Bus), " +
+            "or ConnectionStrings:sqs (AWS SQS/SNS), " +
             "or explicitly set MessageBus:Routing:Provider.");
     }
 
@@ -211,5 +237,14 @@ public static class MessageBusExtensions
     {
         return !string.IsNullOrEmpty(configuration["ConnectionStrings:servicebus"])
             || !string.IsNullOrEmpty(configuration.GetConnectionString("servicebus"));
+    }
+
+    /// <summary>
+    /// Checks if an AWS SQS connection string (endpoint URL) is configured.
+    /// </summary>
+    internal static bool HasSqsConnectionString(IConfiguration configuration)
+    {
+        return !string.IsNullOrEmpty(configuration["ConnectionStrings:sqs"])
+            || !string.IsNullOrEmpty(configuration.GetConnectionString("sqs"));
     }
 }

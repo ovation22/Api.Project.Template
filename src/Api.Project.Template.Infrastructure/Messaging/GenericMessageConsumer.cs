@@ -106,13 +106,15 @@ public class GenericMessageConsumer<TMessage, TProcessor>(
     private MessageBrokerConfig BuildConfiguration()
     {
         // Aspire injects broker connection strings under ConnectionStrings:<resource-name>.
-        // RabbitMQ resource is named "messaging"; Azure Service Bus resource is named "servicebus".
+        // RabbitMQ resource is named "messaging"; Azure Service Bus resource is named "servicebus"; LocalStack is named "sqs".
         var connectionString =
             configuration.GetConnectionString("messaging")
             ?? configuration.GetConnectionString("servicebus")
+            ?? configuration.GetConnectionString("sqs")
             ?? throw new InvalidOperationException(
                 "Message broker connection string not configured. " +
-                "Aspire should inject ConnectionStrings:messaging (RabbitMQ) or ConnectionStrings:servicebus (Azure Service Bus).");
+                "Aspire should inject ConnectionStrings:messaging (RabbitMQ), ConnectionStrings:servicebus (Azure Service Bus), " +
+                "or ConnectionStrings:sqs (AWS SQS/LocalStack).");
 
         var config = new MessageBrokerConfig
         {
@@ -147,6 +149,19 @@ public class GenericMessageConsumer<TMessage, TProcessor>(
         var subscriptionName = configuration["MessageBus:ServiceBus:SubscriptionName"];
         if (!string.IsNullOrWhiteSpace(subscriptionName))
             config.ProviderSpecific["SubscriptionName"] = subscriptionName;
+
+        // AWS SQS-specific configuration
+        var sqsRegion = configuration["MessageBus:Sqs:Region"] ?? configuration["AWS:Region"];
+        if (!string.IsNullOrWhiteSpace(sqsRegion))
+            config.ProviderSpecific["Region"] = sqsRegion;
+
+        var accessKey = configuration["AWS:AccessKey"];
+        if (!string.IsNullOrWhiteSpace(accessKey))
+            config.ProviderSpecific["AccessKey"] = accessKey;
+
+        var secretKey = configuration["AWS:SecretKey"];
+        if (!string.IsNullOrWhiteSpace(secretKey))
+            config.ProviderSpecific["SecretKey"] = secretKey;
 
         return config;
     }

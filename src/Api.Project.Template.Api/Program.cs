@@ -44,6 +44,8 @@ public class Program
                 builder.AddRabbitMqMessageBus();
             else if (messagingProvider == "ServiceBus")
                 builder.AddServiceBusMessageBus();
+            else if (messagingProvider == "Sqs")
+                builder.AddSqsMessageBus();
 
             builder.Services.AddInfrastructure();
             builder.Services.AddApplication();
