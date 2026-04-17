@@ -42,7 +42,7 @@ public class MessageBusExtensionsTests
             MessageBusExtensions.ResolveProvider("Redis", config));
 
         Assert.Contains("Invalid MessageBus:Routing:Provider value: 'Redis'", ex.Message);
-        Assert.Contains("Valid values: 'RabbitMq', 'ServiceBus', 'Auto'", ex.Message);
+        Assert.Contains("Valid values: 'RabbitMq', 'ServiceBus', 'Sqs', 'Auto'", ex.Message);
     }
 
     [Theory]
@@ -367,7 +367,7 @@ public class MessageBusExtensionsTests
             services.AddMessageBus(config));
 
         Assert.Contains("Invalid MessageBus:Routing:Provider value: 'Kafka'", ex.Message);
-        Assert.Contains("Valid values: 'RabbitMq', 'ServiceBus', 'Auto'", ex.Message);
+        Assert.Contains("Valid values: 'RabbitMq', 'ServiceBus', 'Sqs', 'Auto'", ex.Message);
     }
 
     private static IConfiguration CreateEmptyConfiguration()
