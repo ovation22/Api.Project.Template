@@ -13,4 +13,9 @@ public static class MessagingConfig
     {
         builder.Services.AddMessageBus(builder.Configuration);
     }
+
+    public static void AddSqsMessageBus(this IHostApplicationBuilder builder)
+    {
+        builder.Services.AddMessageBus(builder.Configuration);
+    }
 }

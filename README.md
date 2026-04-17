@@ -125,7 +125,8 @@ Messaging is provider-switchable via the `MessagingProvider` setting, following 
 |---|---|---|
 | `None` | Disabled | No broker started or registered |
 | `RabbitMq` | RabbitMQ | Docker container via Aspire, management UI at port 15672 |
-| `ServiceBus` | Azure Service Bus | Azure resource provisioned via Aspire |
+| `ServiceBus` | Azure Service Bus | Azure Service Bus emulator via Aspire (no subscription required in dev) |
+| `Sqs` | AWS SQS / SNS | LocalStack Docker container via Aspire (no AWS account required in dev) |
 
 ```json
 {
@@ -155,12 +156,12 @@ Messages are published from the Application layer using the **domain event patte
 Handler → IPublisher.Publish(WeatherForecastRequestedEvent)
         → WeatherForecastRequestedEventHandler
         → IMessagePublisher.PublishAsync
-        → RoutingMessagePublisher → RabbitMqMessagePublisher / ServiceBusMessagePublisher
+        → RoutingMessagePublisher → RabbitMqMessagePublisher / ServiceBusMessagePublisher / SqsMessagePublisher
 ```
 
 ### Routing Configuration
 
-Routes are configured per message type in `appsettings.json`. The key is `typeof(T).Name` of the published event. Both `RoutingKey` (RabbitMQ) and `Subject` (Service Bus) coexist so you can switch providers without changing config:
+Routes are configured per message type in `appsettings.json`. The key is `typeof(T).Name` of the published event. `RoutingKey` (RabbitMQ), `Subject` (Service Bus / SNS), and `Destination` (queue URL or SNS topic ARN for SQS) coexist so you can switch providers without changing routing config:
 
 ```json
 "MessageBus": {
@@ -174,9 +175,15 @@ Routes are configured per message type in `appsettings.json`. The key is `typeof
         "Subject": "WeatherRequested"
       }
     }
+  },
+  "Sqs": {
+    "Region": "us-east-1",
+    "DefaultDestination": ""
   }
 }
 ```
+
+For SQS/SNS, `Destination` in a route is either a queue URL (`https://sqs.us-east-1.amazonaws.com/…/queue-name`) or an SNS topic ARN (`arn:aws:sns:us-east-1:…:topic-name`). The publisher detects the type automatically by the ARN prefix. For local development with LocalStack the URLs follow the pattern `http://localhost:4566/000000000000/queue-name`.
 
 ### Consuming — Worker Service
 
@@ -200,9 +207,14 @@ Consumer queue and broker-specific settings live in the Worker's `appsettings.js
     "Exchange": "apiprojecttemplate.events",
     "RoutingKey": "WeatherRequested",
     "ExchangeType": "topic"
+  },
+  "Sqs": {
+    "Region": "us-east-1"
   }
 }
 ```
+
+`MessageBus:Consumer:Queue` is the queue name for RabbitMQ and Service Bus, and the SQS queue name for AWS (the adapter resolves it to a full URL via `GetQueueUrlAsync` at startup). For SQS, dead-lettering is handled by configuring a **DLQ redrive policy** on the queue itself rather than in code — messages that exceed `MaxRetries` are deleted and fall through to the DLQ if one is attached.
 
 ---
 
@@ -552,6 +564,7 @@ The [Richardson Maturity Model](https://martinfowler.com/articles/richardsonMatu
 - [x] Messaging (provider-switchable via `MessagingProvider`)
   - [x] RabbitMQ
   - [x] Azure Service Bus
+  - [x] AWS SQS / SNS (LocalStack for local dev — no AWS account required)
   - [x] Domain event pattern (MediatR notifications → message bus)
   - [x] Worker Service consumer (`Api.Project.Template.Worker`)
 - [x] Specifications (Ardalis.Specification)
