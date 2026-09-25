@@ -121,7 +121,7 @@ public class SqsMessagePublisher : IMessagePublisher, IAsyncDisposable
             TopicArn = topicArn,
             Message = payload,
             Subject = subject,
-            MessageAttributes =
+            MessageAttributes = new Dictionary<string, Amazon.SimpleNotificationService.Model.MessageAttributeValue>
             {
                 ["MessageType"] = new Amazon.SimpleNotificationService.Model.MessageAttributeValue { DataType = "String", StringValue = messageType },
                 ["Timestamp"] = new Amazon.SimpleNotificationService.Model.MessageAttributeValue { DataType = "String", StringValue = DateTimeOffset.UtcNow.ToString("O") }
@@ -141,7 +141,7 @@ public class SqsMessagePublisher : IMessagePublisher, IAsyncDisposable
         {
             QueueUrl = queueUrl,
             MessageBody = payload,
-            MessageAttributes =
+            MessageAttributes = new Dictionary<string, Amazon.SQS.Model.MessageAttributeValue>
             {
                 ["MessageType"] = new Amazon.SQS.Model.MessageAttributeValue { DataType = "String", StringValue = messageType },
                 ["Subject"] = new Amazon.SQS.Model.MessageAttributeValue { DataType = "String", StringValue = subject },
