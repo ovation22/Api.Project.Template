@@ -135,7 +135,8 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
                 continue;
             }
 
-            foreach (var sqsMessage in response.Messages)
+            // AWS SDK v4 returns null (not an empty list) when no messages were received
+            foreach (var sqsMessage in response.Messages ?? [])
             {
                 await semaphore.WaitAsync(cancellationToken);
 
@@ -174,17 +175,21 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
             return;
         }
 
-        sqsMessage.Attributes.TryGetValue("ApproximateReceiveCount", out var receiveCountStr);
+        // AWS SDK v4 leaves collections null when the response omits them
+        string? receiveCountStr = null;
+        sqsMessage.Attributes?.TryGetValue("ApproximateReceiveCount", out receiveCountStr);
         _ = int.TryParse(receiveCountStr, out var deliveryCount);
+
+        var messageAttributes = sqsMessage.MessageAttributes ?? [];
 
         var context = new MessageContext
         {
             MessageId = sqsMessage.MessageId,
-            CorrelationId = sqsMessage.MessageAttributes.TryGetValue("CorrelationId", out var correlationAttr)
+            CorrelationId = messageAttributes.TryGetValue("CorrelationId", out var correlationAttr)
                 ? correlationAttr.StringValue ?? ""
                 : "",
             DeliveryCount = deliveryCount,
-            Headers = sqsMessage.MessageAttributes.ToDictionary(
+            Headers = messageAttributes.ToDictionary(
                 kvp => kvp.Key,
                 kvp => (object)(kvp.Value.StringValue ?? "")),
             CancellationToken = cancellationToken

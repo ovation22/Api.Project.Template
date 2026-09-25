@@ -82,7 +82,13 @@ public class Program
             if (app.Environment.IsDevelopment())
             {
                 app.MapOpenApi();
-                app.MapScalarApiReference();
+                app.MapScalarApiReference(options =>
+                {
+                    options
+                        .WithTitle("Api.Project.Template.Api")
+                        .WithTheme(ScalarTheme.BluePlanet)
+                        .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+                });
             }
 
             app.UseMiddleware<ExceptionHandlingMiddleware>();
