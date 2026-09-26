@@ -44,7 +44,7 @@ public class MessageBrokerConfig
     /// Use this dictionary to pass broker-specific settings that don't fit the generic model.
     /// Examples:
     /// - RabbitMQ: "Exchange", "RoutingKey", "ExchangeType"
-    /// - Azure Service Bus: "SubscriptionName", "SessionEnabled"
+    /// - Azure Service Bus: "Topic", "SubscriptionName"
     /// </summary>
     public Dictionary<string, string> ProviderSpecific { get; set; } = new();
 }

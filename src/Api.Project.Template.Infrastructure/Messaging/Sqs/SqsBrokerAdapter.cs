@@ -11,8 +11,9 @@ namespace Api.Project.Template.Infrastructure.Messaging.Sqs;
 /// AWS SQS implementation of IMessageBrokerAdapter.
 /// Uses long-polling to receive messages and a semaphore to bound concurrency.
 /// On success: deletes the message. On retryable failure: sets visibility timeout to 0
-/// for immediate redelivery. On terminal failure: deletes the message — configure a
-/// DLQ redrive policy on the queue for dead-lettering.
+/// for immediate redelivery. On terminal failure (non-retryable, out of retries, or
+/// undeserializable): copies the message to "{queue}-dlq" with a DeadLetterReason attribute,
+/// then deletes the original.
 /// Supports LocalStack for local development (set ConnectionStrings:sqs to the LocalStack endpoint URL).
 /// </summary>
 public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessageBrokerAdapter
@@ -25,6 +26,8 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
 
     private AmazonSQSClient? _sqsClient;
     private string? _queueUrl;
+    private string? _deadLetterQueueUrl;
+    private bool _disposed;
     private int _concurrency;
     private int _maxRetries;
     private CancellationTokenSource? _pollingCts;
@@ -57,6 +60,9 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
         // out-of-band queue provisioning in local and CI environments.
         var createResponse = await _sqsClient.CreateQueueAsync(config.Queue, cancellationToken);
         _queueUrl = createResponse.QueueUrl;
+
+        var deadLetterResponse = await _sqsClient.CreateQueueAsync($"{config.Queue}-dlq", cancellationToken);
+        _deadLetterQueueUrl = deadLetterResponse.QueueUrl;
 
         logger.LogInformation(
             "SqsBrokerAdapter connected (Queue: {Queue}, QueueUrl: {QueueUrl}, Concurrency: {Concurrency})",
@@ -96,8 +102,14 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
 
     public async ValueTask DisposeAsync()
     {
+        // Both the consumer and the DI container dispose this singleton; only the first call does work.
+        if (_disposed)
+            return;
+        _disposed = true;
+
         await DisconnectAsync();
         _pollingCts?.Dispose();
+        _pollingCts = null;
         _sqsClient?.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -164,14 +176,14 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
             logger.LogWarning(ex,
                 "Failed to deserialize SQS message {MessageId}: {Body}",
                 sqsMessage.MessageId, sqsMessage.Body);
-            await _sqsClient!.DeleteMessageAsync(_queueUrl, sqsMessage.ReceiptHandle, cancellationToken);
+            await DeadLetterAsync(sqsMessage, "DeserializationFailed", cancellationToken);
             return;
         }
 
         if (message == null)
         {
             logger.LogWarning("Deserialized SQS message {MessageId} is null", sqsMessage.MessageId);
-            await _sqsClient!.DeleteMessageAsync(_queueUrl, sqsMessage.ReceiptHandle, cancellationToken);
+            await DeadLetterAsync(sqsMessage, "NullMessage", cancellationToken);
             return;
         }
 
@@ -225,12 +237,35 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
         }
         else
         {
-            // Exceeded retries or non-retryable — delete and rely on DLQ redrive if configured
-            await _sqsClient!.DeleteMessageAsync(_queueUrl, sqsMessage.ReceiptHandle, cancellationToken);
+            // Exceeded retries or non-retryable
+            await DeadLetterAsync(sqsMessage, result.ErrorReason ?? "ProcessingFailed", cancellationToken);
 
             logger.LogWarning(
-                "SQS message {MessageId} discarded after {DeliveryCount} deliveries (Reason: {Reason}). Configure a DLQ redrive policy for dead-lettering.",
+                "SQS message {MessageId} dead-lettered after {DeliveryCount} deliveries (Reason: {Reason})",
                 sqsMessage.MessageId, deliveryCount, result.ErrorReason);
         }
+    }
+
+    /// <summary>
+    /// Copies the message to the dead-letter queue, then deletes the original.
+    /// SQS has no "dead-letter now" API (a redrive policy only acts after maxReceiveCount receives),
+    /// so the move is done explicitly. If the send fails, the original is left for redelivery.
+    /// </summary>
+    private async Task DeadLetterAsync(Message sqsMessage, string reason, CancellationToken cancellationToken)
+    {
+        var attributes = new Dictionary<string, MessageAttributeValue>(sqsMessage.MessageAttributes ?? [])
+        {
+            // SQS attribute values can't be empty strings
+            ["DeadLetterReason"] = new() { DataType = "String", StringValue = string.IsNullOrEmpty(reason) ? "Unknown" : reason }
+        };
+
+        await _sqsClient!.SendMessageAsync(new SendMessageRequest
+        {
+            QueueUrl = _deadLetterQueueUrl,
+            MessageBody = sqsMessage.Body,
+            MessageAttributes = attributes
+        }, cancellationToken);
+
+        await _sqsClient.DeleteMessageAsync(_queueUrl, sqsMessage.ReceiptHandle, cancellationToken);
     }
 }

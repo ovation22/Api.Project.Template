@@ -56,14 +56,7 @@ public class MessageConsumerWorker<TMessage, TProcessor>(
                 logger.LogError(ex, "Error stopping consumer for {MessageType}.", typeof(TMessage).Name);
             }
 
-            try
-            {
-                consumer.Dispose();
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Exception disposing consumer for {MessageType}.", typeof(TMessage).Name);
-            }
+            // The consumer is a DI singleton — the container disposes it, not this worker.
 
             logger.LogInformation(
                 "MessageConsumerWorker<{MessageType}, {ProcessorType}> stopped.",

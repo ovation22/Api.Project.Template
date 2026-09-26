@@ -3,6 +3,7 @@ using Api.Project.Template.Application.Messaging;
 using Api.Project.Template.Infrastructure.Messaging.Abstractions;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
 using System.Text;
 using System.Text.Json;
 
@@ -11,6 +12,8 @@ namespace Api.Project.Template.Infrastructure.Messaging.RabbitMq;
 /// <summary>
 /// RabbitMQ implementation of IMessageBrokerAdapter.
 /// Wraps RabbitMQ.Client APIs to provide a consistent interface for message consumption.
+/// Retryable failures are republished with an x-retry-count header until MaxRetries is reached;
+/// everything else is dead-lettered to "{queue}.dlq" via the "{queue}.dlx" exchange.
 /// </summary>
 public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger) : IMessageBrokerAdapter
 {
@@ -25,6 +28,11 @@ public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger)
     private IChannel? _channel;
     private SemaphoreSlim? _semaphore;
     private string? _queueName;
+    private int _maxRetries;
+    private bool _disposed;
+
+    // Classic queues don't track delivery attempts, so retries are counted in this header.
+    private const string RetryCountHeader = "x-retry-count";
 
     public async Task ConnectAsync(MessageBrokerConfig config, CancellationToken cancellationToken)
     {
@@ -48,14 +56,35 @@ public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger)
         var routingKey = config.ProviderSpecific.GetValueOrDefault("RoutingKey", "");
         var exchangeType = config.ProviderSpecific.GetValueOrDefault("ExchangeType", ExchangeType.Topic);
 
+        // Declare the dead-letter exchange and queue: failed messages are routed here
+        // (via x-dead-letter-exchange) instead of being dropped.
+        var deadLetterExchange = $"{config.Queue}.dlx";
+        var deadLetterQueue = $"{config.Queue}.dlq";
+        await _channel.ExchangeDeclareAsync(deadLetterExchange, ExchangeType.Fanout, durable: true, cancellationToken: cancellationToken);
+        await _channel.QueueDeclareAsync(deadLetterQueue, durable: true, exclusive: false, autoDelete: false, cancellationToken: cancellationToken);
+        await _channel.QueueBindAsync(deadLetterQueue, deadLetterExchange, routingKey: "", cancellationToken: cancellationToken);
+
         // Declare exchange and queue
         await _channel.ExchangeDeclareAsync(exchange, exchangeType, durable: true, cancellationToken: cancellationToken);
-        await _channel.QueueDeclareAsync(
-            queue: config.Queue,
-            durable: true,
-            exclusive: false,
-            autoDelete: false,
-            arguments: null, cancellationToken: cancellationToken);
+        try
+        {
+            await _channel.QueueDeclareAsync(
+                queue: config.Queue,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: new Dictionary<string, object?> { ["x-dead-letter-exchange"] = deadLetterExchange },
+                cancellationToken: cancellationToken);
+        }
+        catch (OperationInterruptedException ex) when (ex.ShutdownReason?.ReplyCode == Constants.PreconditionFailed)
+        {
+            // RabbitMQ cannot change the arguments of an existing queue.
+            throw new InvalidOperationException(
+                $"Queue '{config.Queue}' already exists without dead-letter settings. " +
+                "Delete it once (e.g. in the management UI) so it can be re-declared with x-dead-letter-exchange.", ex);
+        }
+
+        _maxRetries = config.MaxRetries;
 
         await _channel.QueueBindAsync(
             queue: config.Queue,
@@ -108,25 +137,27 @@ public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger)
                         "Failed to deserialize message on queue {Queue}: {Payload}",
                         _queueName, payload);
 
-                    // ACK invalid messages to prevent reprocessing
-                    await AckMessageAsync(ea.DeliveryTag);
+                    // Dead-letter invalid messages so they can be inspected
+                    await NackMessageAsync(ea.DeliveryTag, requeue: false);
                     return;
                 }
 
                 if (message == null)
                 {
                     logger.LogWarning("Deserialized message is null on queue {Queue}", _queueName);
-                    await AckMessageAsync(ea.DeliveryTag);
+                    await NackMessageAsync(ea.DeliveryTag, requeue: false);
                     return;
                 }
+
+                var retryCount = GetRetryCount(ea.BasicProperties.Headers);
 
                 // Create message context
                 var context = new MessageContext
                 {
                     MessageId = ea.BasicProperties.MessageId ?? ea.DeliveryTag.ToString(),
                     CorrelationId = ea.BasicProperties.CorrelationId ?? "",
-                    DeliveryCount = ea.Redelivered ? 2 : 1, // RabbitMQ doesn't expose exact count
-                    Headers = ConvertHeaders(ea.BasicProperties?.Headers),
+                    DeliveryCount = retryCount + 1,
+                    Headers = ConvertHeaders(ea.BasicProperties.Headers),
                     CancellationToken = cancellationToken
                 };
 
@@ -149,13 +180,24 @@ public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger)
                 {
                     await AckMessageAsync(ea.DeliveryTag);
                 }
-                else
+                else if (result.Requeue && context.DeliveryCount < _maxRetries)
                 {
-                    await NackMessageAsync(ea.DeliveryTag, result.Requeue);
+                    // Republish with an incremented retry count, then ack the original.
+                    // (A plain nack+requeue can't carry a count and would retry forever.)
+                    await RepublishForRetryAsync(ea, retryCount + 1);
 
                     logger.LogWarning(
-                        "Message processing failed (Queue: {Queue}, Requeue: {Requeue}, Reason: {Reason})",
-                        _queueName, result.Requeue, result.ErrorReason);
+                        "Message processing failed, retrying (Queue: {Queue}, DeliveryCount: {DeliveryCount}, Reason: {Reason})",
+                        _queueName, context.DeliveryCount, result.ErrorReason);
+                }
+                else
+                {
+                    // Non-retryable or out of retries: nack without requeue → dead-letter queue
+                    await NackMessageAsync(ea.DeliveryTag, requeue: false);
+
+                    logger.LogWarning(
+                        "Message dead-lettered (Queue: {Queue}, DeliveryCount: {DeliveryCount}, Reason: {Reason})",
+                        _queueName, context.DeliveryCount, result.ErrorReason);
                 }
             }
             catch (OperationCanceledException)
@@ -218,6 +260,11 @@ public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger)
 
     public async ValueTask DisposeAsync()
     {
+        // Both the consumer and the DI container dispose this singleton; only the first call does work.
+        if (_disposed)
+            return;
+        _disposed = true;
+
         await DisconnectAsync();
 
         _semaphore?.Dispose();
@@ -256,6 +303,49 @@ public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger)
         {
             _channelLock.Release();
         }
+    }
+
+    private async Task RepublishForRetryAsync(BasicDeliverEventArgs ea, int retryCount)
+    {
+        var properties = new BasicProperties(ea.BasicProperties)
+        {
+            Headers = new Dictionary<string, object?>(ea.BasicProperties.Headers ?? new Dictionary<string, object?>())
+            {
+                [RetryCountHeader] = retryCount
+            }
+        };
+
+        await _channelLock.WaitAsync();
+        try
+        {
+            // Default exchange + queue name as routing key delivers straight back to this queue.
+            // Publish before ack: a crash in between redelivers rather than loses the message.
+            await _channel!.BasicPublishAsync(
+                exchange: "",
+                routingKey: _queueName!,
+                mandatory: false,
+                basicProperties: properties,
+                body: ea.Body);
+            await _channel.BasicAckAsync(ea.DeliveryTag, multiple: false);
+        }
+        finally
+        {
+            _channelLock.Release();
+        }
+    }
+
+    private static int GetRetryCount(IDictionary<string, object?>? headers)
+    {
+        if (headers == null || !headers.TryGetValue(RetryCountHeader, out var value))
+            return 0;
+
+        return value switch
+        {
+            int i => i,
+            long l => (int)l,
+            byte[] bytes when int.TryParse(Encoding.UTF8.GetString(bytes), out var parsed) => parsed,
+            _ => 0
+        };
     }
 
     private static IReadOnlyDictionary<string, object> ConvertHeaders(IDictionary<string, object?>? headers)

@@ -145,7 +145,11 @@ public class GenericMessageConsumer<TMessage, TProcessor>(
         if (!string.IsNullOrWhiteSpace(exchangeType))
             config.ProviderSpecific["ExchangeType"] = exchangeType;
 
-        // Azure Service Bus-specific configuration
+        // Azure Service Bus-specific configuration (Topic set = consume a topic subscription instead of a queue)
+        var topic = configuration["MessageBus:ServiceBus:Topic"];
+        if (!string.IsNullOrWhiteSpace(topic))
+            config.ProviderSpecific["Topic"] = topic;
+
         var subscriptionName = configuration["MessageBus:ServiceBus:SubscriptionName"];
         if (!string.IsNullOrWhiteSpace(subscriptionName))
             config.ProviderSpecific["SubscriptionName"] = subscriptionName;

@@ -47,7 +47,7 @@ public class ServiceBusMessagePublisher : IMessagePublisher, IAsyncDisposable
         };
 
         _logger.LogInformation(
-            "ServiceBusMessagePublisher configured for queue {Queue}",
+            "ServiceBusMessagePublisher configured (default queue/topic when no route applies: {Queue})",
             _defaultQueue);
     }
 
@@ -85,7 +85,7 @@ public class ServiceBusMessagePublisher : IMessagePublisher, IAsyncDisposable
             await sender.SendMessageAsync(sbMessage, cancellationToken);
 
             _logger.LogInformation(
-                "Published message {MessageType} to queue {Queue} (MessageId: {MessageId})",
+                "Published message {MessageType} to queue/topic {Queue} (MessageId: {MessageId})",
                 typeof(T).Name,
                 queueName,
                 sbMessage.MessageId);
@@ -93,7 +93,7 @@ public class ServiceBusMessagePublisher : IMessagePublisher, IAsyncDisposable
         catch (ServiceBusException ex)
         {
             _logger.LogError(ex,
-                "Failed to publish message {MessageType} to queue {Queue}",
+                "Failed to publish message {MessageType} to queue/topic {Queue}",
                 typeof(T).Name,
                 queueName);
             throw;
