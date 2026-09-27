@@ -38,7 +38,7 @@ public class WeatherForecastController(ISender sender) : ControllerBase
     ///   <item><term>Filters[Summary].Value</term><description>Warm</description></item>
     /// </list>
     /// 
-    /// Available FilterOperators: Eq, NotEq, Gt, Gte, Lt, Lte, Contains, StartsWith, EndsWith, Between
+    /// Available FilterOperators: Eq, Ne, Gt, Gte, Lt, Lte, Contains, StartsWith, EndsWith, Between
     /// </remarks>
     /// <response code="200">Returns the paged weather forecasts result.</response>
     /// <response code="400">Unable to return weather forecasts.</response>

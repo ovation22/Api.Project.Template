@@ -403,6 +403,38 @@ The handler's job is to orchestrate — receive a request, call a service, map t
 
 This template ships with a generic `IRepository`. As your domain grows, consider adding specific repository interfaces (e.g. `IWeatherForecastRepository : IRepository`) that expose only the operations that feature needs. This follows the **Interface Segregation Principle** and prevents handlers from having access to operations they shouldn't use.
 
+### Transactions
+
+Repository methods save immediately. To make several of them atomic, use `ITransactionManager` (defined in Application, implemented by `TransactionManager` in Infrastructure). Prefer `ExecuteAsync`:
+
+```csharp
+await transactionManager.ExecuteAsync(async () =>
+{
+    await repository.CreateAsync(order, cancellationToken);
+    await repository.UpdateAsync(inventory, cancellationToken);
+}, cancellationToken);
+```
+
+`ExecuteAsync` commits when the operation completes and rolls back if it throws. It runs the transaction under EF Core's **execution strategy**, so its behavior depends on whether the `DbContext` retries on transient failures (dropped connections, deadlocks, failovers):
+
+| Retries | When | `ExecuteAsync` | `BeginTransactionAsync` / `CommitAsync` / `RollbackAsync` |
+|---|---|---|---|
+| **On** | Aspire's `AddSqlServerDbContext` / `AddNpgsqlDbContext` (the default in this template), or your own `UseSqlServer(..., o => o.EnableRetryOnFailure())` | Rolls back and **reruns the whole operation** on a transient failure | Throws `InvalidOperationException` — a manually opened transaction can't be retried as a unit, so EF rejects it |
+| **Off** | Plain `UseSqlServer` / `UseNpgsql` / `UseSqlite`, no retry configured | Runs once | Works as usual |
+
+Nothing here depends on Aspire — Aspire just turns retries on by default.
+
+**Because a retry reruns the whole operation, it must be safe to repeat.** Do database work inside it, and keep one-way side effects (sending email, publishing messages, calling external APIs) outside or after it.
+
+To use the manual `BeginTransactionAsync` / `CommitAsync` style instead, turn Aspire's retries off — at the cost of no automatic retry on transient failures:
+
+```json
+"Aspire": {
+  "Microsoft": { "EntityFrameworkCore": { "SqlServer": { "DisableRetry": true } } },
+  "Npgsql": { "EntityFrameworkCore": { "PostgreSQL": { "DisableRetry": true } } }
+}
+```
+
 ### Logger Adapter
 
 `ILoggerAdapter<T>` wraps `ILogger<T>` and is defined in Application. This allows handlers and services to log without taking a hard dependency on `Microsoft.Extensions.Logging`, keeping Application infrastructure-free and making logging easy to mock in tests.

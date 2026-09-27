@@ -14,6 +14,8 @@ public class PaginatedSpecificationTests
         public int Score { get; set; }
         public int? NullableScore { get; set; }
         public DateOnly Date { get; set; }
+        public DateOnly? NullableDate { get; set; }
+        public int DoubleScore => Score * 2;
     }
 
     private sealed class TestSpec : PaginatedSpecification<Item>
@@ -113,13 +115,60 @@ public class PaginatedSpecificationTests
 
     [Fact]
     [Trait("Method", "ApplySorting")]
-    public void ApplySorting_UnknownProperty_ThrowsNotSupportedException()
+    public void ApplySorting_UnknownProperty_ThrowsInvalidSpecificationException()
     {
         // Arrange
         var spec = new TestSpec();
 
         // Act & Assert
-        Assert.Throws<NotSupportedException>(() => spec.Sort("NonExistent", SortDirection.Asc));
+        var ex = Assert.Throws<InvalidSpecificationException>(() => spec.Sort("NonExistent", SortDirection.Asc));
+        Assert.Equal("NonExistent", ex.PropertyName);
+    }
+
+    [Fact]
+    [Trait("Method", "ApplySorting")]
+    public void ApplySorting_ComputedProperty_ThrowsInvalidSpecificationException()
+    {
+        // Arrange
+        var spec = new TestSpec();
+
+        // Act & Assert
+        Assert.Throws<InvalidSpecificationException>(() => spec.Sort("DoubleScore", SortDirection.Asc));
+    }
+
+    [Fact]
+    [Trait("Method", "ApplySorting")]
+    public void ApplySorting_DuplicateSortValues_OrdersByIdAsTieBreaker()
+    {
+        // Arrange
+        var spec = new TestSpec();
+        spec.Sort("Score", SortDirection.Desc);
+        var items = new[]
+        {
+            new Item { Id = 3, Score = 10 },
+            new Item { Id = 1, Score = 10 },
+            new Item { Id = 2, Score = 20 }
+        };
+
+        // Act
+        var result = spec.Evaluate(items).Select(x => x.Id).ToList();
+
+        // Assert
+        Assert.Equal([2, 1, 3], result);
+    }
+
+    [Fact]
+    [Trait("Method", "ApplySorting")]
+    public void ApplySorting_ById_DoesNotAddTieBreaker()
+    {
+        // Arrange
+        var spec = new TestSpec();
+
+        // Act
+        spec.Sort("id", SortDirection.Asc);
+
+        // Assert
+        Assert.Single(spec.OrderExpressions);
     }
 
     [Fact]
@@ -424,13 +473,13 @@ public class PaginatedSpecificationTests
 
     [Fact]
     [Trait("Method", "ApplyAndFilters")]
-    public void ApplyAndFilters_NullValueForNonBetweenOperator_ThrowsInvalidOperationException()
+    public void ApplyAndFilters_NullValueForNonBetweenOperator_ThrowsInvalidSpecificationException()
     {
         // Arrange
         var spec = new TestSpec();
 
         // Act & Assert
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<InvalidSpecificationException>(() =>
             spec.AndFilter(new Dictionary<string, Filter>
             {
                 ["Score"] = new Filter { Operator = FilterOperator.Eq, Value = null }
@@ -439,17 +488,121 @@ public class PaginatedSpecificationTests
 
     [Fact]
     [Trait("Method", "ApplyAndFilters")]
-    public void ApplyAndFilters_BetweenWithMissingRangeValues_ThrowsInvalidOperationException()
+    public void ApplyAndFilters_BetweenWithMissingRangeValues_ThrowsInvalidSpecificationException()
     {
         // Arrange
         var spec = new TestSpec();
 
         // Act & Assert
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<InvalidSpecificationException>(() =>
             spec.AndFilter(new Dictionary<string, Filter>
             {
                 ["Score"] = new Filter { Operator = FilterOperator.Between }
             }));
+    }
+
+    [Fact]
+    [Trait("Method", "ApplyAndFilters")]
+    public void ApplyAndFilters_UnknownProperty_ThrowsInvalidSpecificationException()
+    {
+        // Arrange
+        var spec = new TestSpec();
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidSpecificationException>(() =>
+            spec.AndFilter(new Dictionary<string, Filter>
+            {
+                ["Missing"] = new Filter { Operator = FilterOperator.Eq, Value = "1" }
+            }));
+        Assert.Equal("Missing", ex.PropertyName);
+    }
+
+    [Fact]
+    [Trait("Method", "ApplyAndFilters")]
+    public void ApplyAndFilters_ComputedProperty_ThrowsInvalidSpecificationException()
+    {
+        // Arrange
+        var spec = new TestSpec();
+
+        // Act & Assert
+        Assert.Throws<InvalidSpecificationException>(() =>
+            spec.AndFilter(new Dictionary<string, Filter>
+            {
+                ["DoubleScore"] = new Filter { Operator = FilterOperator.Eq, Value = "2" }
+            }));
+    }
+
+    [Fact]
+    [Trait("Method", "ApplyAndFilters")]
+    public void ApplyAndFilters_UnconvertibleValue_ThrowsInvalidSpecificationException()
+    {
+        // Arrange
+        var spec = new TestSpec();
+
+        // Act & Assert
+        Assert.Throws<InvalidSpecificationException>(() =>
+            spec.AndFilter(new Dictionary<string, Filter>
+            {
+                ["Score"] = new Filter { Operator = FilterOperator.Eq, Value = "abc" }
+            }));
+    }
+
+    [Fact]
+    [Trait("Method", "ApplyAndFilters")]
+    [Trait("Operator", "Contains")]
+    public void ApplyAndFilters_ContainsOnNumericProperty_ThrowsInvalidSpecificationException()
+    {
+        // Arrange
+        var spec = new TestSpec();
+
+        // Act & Assert
+        Assert.Throws<InvalidSpecificationException>(() =>
+            spec.AndFilter(new Dictionary<string, Filter>
+            {
+                ["Score"] = new Filter { Operator = FilterOperator.Contains, Value = "1" }
+            }));
+    }
+
+    [Fact]
+    [Trait("Method", "ApplyAndFilters")]
+    [Trait("Operator", "Gt")]
+    public void ApplyAndFilters_GtOnStringProperty_ThrowsInvalidSpecificationException()
+    {
+        // Arrange
+        var spec = new TestSpec();
+
+        // Act & Assert
+        Assert.Throws<InvalidSpecificationException>(() =>
+            spec.AndFilter(new Dictionary<string, Filter>
+            {
+                ["Name"] = new Filter { Operator = FilterOperator.Gt, Value = "a" }
+            }));
+    }
+
+    [Fact]
+    [Trait("Method", "ApplyAndFilters")]
+    [Trait("Operator", "Eq")]
+    public void ApplyAndFilters_NullableDateOnly_MatchesEqualValue()
+    {
+        // Arrange
+        var spec = new TestSpec();
+        spec.AndFilter(new Dictionary<string, Filter>
+        {
+            ["NullableDate"] = new Filter { Operator = FilterOperator.Eq, Value = "2025-06-15" }
+        });
+        var items = new[]
+        {
+            new Item { NullableDate = new DateOnly(2025, 6, 15) },
+            new Item { NullableDate = null },
+            new Item { NullableDate = new DateOnly(2025, 6, 16) }
+        };
+
+        // Act
+        var result = spec.Evaluate(items);
+
+        // Assert
+        Assert.Single(result);
+        Assert.Equal(new DateOnly(2025, 6, 15), result.Single().NullableDate);
     }
 
     [Fact]

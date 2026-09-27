@@ -102,4 +102,20 @@ public class GetWeatherForecastsQueryHandlerTests
             It.IsAny<PaginatedSpecification<WeatherForecast, GetWeatherForecastsResponse>>(),
             It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task Handle_WhenSortByIsInvalid_ReturnsInvalidWithoutQueryingOrPublishing()
+    {
+        // Arrange
+        var request = new PaginationRequest { SortBy = "TemperatureF" };
+
+        // Act
+        var result = await _handler.Handle(new GetWeatherForecastsQuery(request), CancellationToken.None);
+
+        // Assert
+        result.Status.Should().Be(ResultStatus.Invalid);
+        result.ValidationErrors.Should().ContainSingle(e => e.Identifier == "TemperatureF");
+        _repositoryMock.VerifyNoOtherCalls();
+        _publisherMock.VerifyNoOtherCalls();
+    }
 }

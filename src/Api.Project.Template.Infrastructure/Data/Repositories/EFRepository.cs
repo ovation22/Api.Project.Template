@@ -148,10 +148,7 @@ public abstract class EFRepository(DbContext dbContext, ILoggerAdapter<EFReposit
         var totalCount = await countQuery.CountAsync(cancellationToken);
 
         var query = ApplySpecification(specification);
-        var items = await query
-            .Skip((specification.PageNumber - 1) * specification.PageSize)
-            .Take(specification.PageSize)
-            .ToListAsync(cancellationToken);
+        var items = await GetPageAsync(query, specification.PageNumber, specification.PageSize, cancellationToken);
 
         return new PagedList<T>(items, totalCount, specification.PageNumber, specification.PageSize);
     }
@@ -164,10 +161,7 @@ public abstract class EFRepository(DbContext dbContext, ILoggerAdapter<EFReposit
         var totalCount = await countQuery.CountAsync(cancellationToken);
 
         var query = ApplySpecification(specification);
-        var items = await query
-            .Skip((specification.PageNumber - 1) * specification.PageSize)
-            .Take(specification.PageSize)
-            .ToListAsync(cancellationToken);
+        var items = await GetPageAsync(query, specification.PageNumber, specification.PageSize, cancellationToken);
 
         return new PagedList<TResult>(items, totalCount, specification.PageNumber, specification.PageSize);
     }
@@ -304,11 +298,11 @@ public abstract class EFRepository(DbContext dbContext, ILoggerAdapter<EFReposit
             logger.LogError(ex, "An error occurred while updating the database.");
             throw new Exception("An error occurred while updating the database.", ex);
         }
-        catch (TaskCanceledException ex)
+        catch (OperationCanceledException ex)
         {
-            // Handle task cancellation
+            // Cancellation isn't a failure — rethrow as-is so callers and middleware can recognize it
             logger.LogWarning(ex, "The operation was canceled.");
-            throw new OperationCanceledException("The operation was canceled.", ex, cancellationToken);
+            throw;
         }
         catch (Exception ex)
         {
@@ -316,6 +310,25 @@ public abstract class EFRepository(DbContext dbContext, ILoggerAdapter<EFReposit
             logger.LogError(ex, "An error occurred while saving changes.");
             throw new Exception("An error occurred while saving changes.", ex);
         }
+    }
+
+    /// <summary>
+    /// Returns one page of the query. The offset is computed in 64-bit so a very large page number
+    /// can't overflow into a negative OFFSET; a page past the end of the data is simply empty.
+    /// </summary>
+    private static async Task<List<TItem>> GetPageAsync<TItem>(IQueryable<TItem> query, int pageNumber, int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var skip = (long)(pageNumber - 1) * pageSize;
+        if (skip > int.MaxValue)
+        {
+            return [];
+        }
+
+        return await query
+            .Skip((int)skip)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
     }
 
     /// <summary>

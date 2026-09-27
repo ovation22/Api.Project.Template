@@ -1,5 +1,6 @@
 using Api.Project.Template.Application.Abstractions.Data;
 using Api.Project.Template.Application.Abstractions.Logging;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Api.Project.Template.Infrastructure.Data;
@@ -15,6 +16,15 @@ public class TransactionManager(ApiProjectTemplateContext dbContext, ILoggerAdap
         if (_currentTransaction != null)
         {
             throw new InvalidOperationException("A transaction is already active. Nested transactions are not supported.");
+        }
+
+        // A retrying execution strategy (enabled by Aspire's AddSqlServerDbContext/AddNpgsqlDbContext)
+        // rejects user-initiated transactions; fail here with guidance instead of on the first SaveChanges.
+        if (_dbContext.Database.CreateExecutionStrategy().RetriesOnFailure)
+        {
+            throw new InvalidOperationException(
+                "BeginTransactionAsync can't be used with a retrying execution strategy. " +
+                "Use ExecuteAsync, which runs the transaction under the strategy so it can be retried as a unit.");
         }
 
         _logger.LogDebug("Beginning database transaction");
@@ -73,57 +83,47 @@ public class TransactionManager(ApiProjectTemplateContext dbContext, ILoggerAdap
     {
         if (operation == null) throw new ArgumentNullException(nameof(operation));
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
+        await ExecuteAsync(async () =>
         {
-            _logger.LogDebug("Executing operation within transaction");
             await operation();
-
-            await transaction.CommitAsync(cancellationToken);
-            _logger.LogDebug("Transaction committed successfully");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Operation failed, rolling back transaction");
-            try
-            {
-                await transaction.RollbackAsync(cancellationToken);
-            }
-            catch (Exception rollbackEx)
-            {
-                _logger.LogError(rollbackEx, "Failed to rollback transaction after operation failure");
-            }
-            throw;
-        }
+            return true;
+        }, cancellationToken);
     }
 
     public async Task<T> ExecuteAsync<T>(Func<Task<T>> operation, CancellationToken cancellationToken = default)
     {
         if (operation == null) throw new ArgumentNullException(nameof(operation));
 
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-        try
-        {
-            _logger.LogDebug("Executing operation within transaction");
-            var result = await operation();
+        // Run the whole transaction under the execution strategy so a transient failure retries it as a unit.
+        // (A retrying strategy rejects transactions opened outside of it.)
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
 
-            await transaction.CommitAsync(cancellationToken);
-            _logger.LogDebug("Transaction committed successfully");
-
-            return result;
-        }
-        catch (Exception ex)
+        return await strategy.ExecuteAsync(async ct =>
         {
-            _logger.LogError(ex, "Operation failed, rolling back transaction");
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
             try
             {
-                await transaction.RollbackAsync(cancellationToken);
+                _logger.LogDebug("Executing operation within transaction");
+                var result = await operation();
+
+                await transaction.CommitAsync(ct);
+                _logger.LogDebug("Transaction committed successfully");
+
+                return result;
             }
-            catch (Exception rollbackEx)
+            catch (Exception ex)
             {
-                _logger.LogError(rollbackEx, "Failed to rollback transaction after operation failure");
+                _logger.LogError(ex, "Operation failed, rolling back transaction");
+                try
+                {
+                    await transaction.RollbackAsync(ct);
+                }
+                catch (Exception rollbackEx)
+                {
+                    _logger.LogError(rollbackEx, "Failed to rollback transaction after operation failure");
+                }
+                throw;
             }
-            throw;
-        }
+        }, cancellationToken);
     }
 }

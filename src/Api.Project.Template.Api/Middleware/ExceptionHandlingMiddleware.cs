@@ -10,8 +10,9 @@ public sealed class ExceptionHandlingMiddleware(RequestDelegate next, ILoggerAda
         {
             await next(context);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
+            // Only a client abort is benign; any other cancellation (e.g. a timeout) is a 500 below.
             logger.LogWarning("Request was canceled by the client. Path {path}", context.Request.Path);
         }
         catch (Exception ex)
