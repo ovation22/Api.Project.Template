@@ -1,6 +1,4 @@
 using Api.Project.Template.Api;
-using Api.Project.Template.Application.Messaging;
-using Api.Project.Template.Application.Messaging.Abstractions;
 using Api.Project.Template.Infrastructure.Data;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -28,8 +26,8 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
         // call in Program.cs doesn't throw on missing configuration.
         builder.UseSetting("ConnectionStrings:ApiProjectTemplate", "Server=dummy");
 
-        // Prevent Program.cs from calling AddRabbitMqMessageBus/AddServiceBusMessageBus,
-        // which would register real broker singletons that attempt live connections.
+        // Use the no-op publisher Program.cs registers for "None", so no broker
+        // singletons are created and no live connections are attempted.
         builder.UseSetting("MessagingProvider", "None");
 
         // ConfigureTestServices runs after all app services are registered,
@@ -54,9 +52,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
             // Replace with a plain scoped DbContext backed by SQLite on the shared connection.
             services.AddDbContext<ApiProjectTemplateContext>(options =>
                 options.UseSqlite(_connection));
-
-            // Prevent real broker connection attempts — no RabbitMQ or Service Bus in tests.
-            services.AddSingleton<IMessagePublisher, NullMessagePublisher>();
         });
     }
 
@@ -64,14 +59,5 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>, IAsyn
     {
         await _connection.DisposeAsync();
         await base.DisposeAsync();
-    }
-
-    // Replaces the real broker publisher so integration tests don't attempt
-    // a live RabbitMQ or Service Bus connection. Registered last so it wins
-    // over any publisher registered by Program.cs (DI returns the last registration).
-    private sealed class NullMessagePublisher : IMessagePublisher
-    {
-        public Task PublishAsync<T>(T message, MessagePublishOptions? options = null, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
     }
 }

@@ -41,9 +41,16 @@ if (messagingProvider == "RabbitMq")
 }
 else if (messagingProvider == "ServiceBus")
 {
-    var serviceBus = builder.AddAzureServiceBus("servicebus");
-    api.WithReference(serviceBus);
-    worker.WithReference(serviceBus);
+    // The emulator is used in run mode only; publish mode provisions a real namespace.
+    // The topic mirrors the RabbitMQ exchange so routing config works for both providers.
+    var serviceBus = builder.AddAzureServiceBus("servicebus")
+        .RunAsEmulator();
+
+    serviceBus.AddServiceBusTopic("events", topicName: "apiprojecttemplate.events")
+        .AddServiceBusSubscription("weather-requests");
+
+    api.WithReference(serviceBus).WaitFor(serviceBus);
+    worker.WithReference(serviceBus).WaitFor(serviceBus);
 }
 else if (messagingProvider == "Sqs")
 {

@@ -46,6 +46,8 @@ public class Program
                 builder.AddServiceBusMessageBus();
             else if (messagingProvider == "Sqs")
                 builder.AddSqsMessageBus();
+            else
+                builder.AddNullMessageBus();
 
             builder.Services.AddInfrastructure();
             builder.Services.AddApplication();

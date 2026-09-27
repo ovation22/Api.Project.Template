@@ -39,18 +39,29 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
 
         _client = new ServiceBusClient(config.ConnectionString);
 
-        _processor = _client.CreateProcessor(
-            config.Queue,
-            new ServiceBusProcessorOptions
-            {
-                AutoCompleteMessages = false,
-                MaxConcurrentCalls = config.Concurrency,
-                PrefetchCount = config.PrefetchCount
-            });
+        var options = new ServiceBusProcessorOptions
+        {
+            AutoCompleteMessages = false,
+            MaxConcurrentCalls = config.Concurrency,
+            PrefetchCount = config.PrefetchCount
+        };
+
+        // With a Topic configured, consume the topic's subscription (defaults to the queue name);
+        // otherwise consume the queue directly.
+        if (config.ProviderSpecific.TryGetValue("Topic", out var topic))
+        {
+            var subscription = config.ProviderSpecific.GetValueOrDefault("SubscriptionName", config.Queue);
+            _processor = _client.CreateProcessor(topic, subscription, options);
+            _queueName = $"{topic}/subscriptions/{subscription}";
+        }
+        else
+        {
+            _processor = _client.CreateProcessor(config.Queue, options);
+        }
 
         logger.LogInformation(
-            "ServiceBusBrokerAdapter configured (Queue: {Queue}, Concurrency: {Concurrency}) — connection deferred to SubscribeAsync",
-            config.Queue, config.Concurrency);
+            "ServiceBusBrokerAdapter configured (Entity: {Queue}, Concurrency: {Concurrency}) — connection deferred to SubscribeAsync",
+            _queueName, config.Concurrency);
 
         await Task.CompletedTask;
     }

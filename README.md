@@ -214,7 +214,17 @@ Consumer queue and broker-specific settings live in the Worker's `appsettings.js
 }
 ```
 
-`MessageBus:Consumer:Queue` is the queue name for RabbitMQ and Service Bus, and the SQS queue name for AWS (the adapter resolves it to a full URL via `GetQueueUrlAsync` at startup). For SQS, dead-lettering is handled by configuring a **DLQ redrive policy** on the queue itself rather than in code — messages that exceed `MaxRetries` are deleted and fall through to the DLQ if one is attached.
+`MessageBus:Consumer:Queue` is the queue name for RabbitMQ and SQS (the SQS adapter creates the queue if needed and resolves its URL at startup). For Service Bus, setting `MessageBus:ServiceBus:Topic` consumes the `SubscriptionName` subscription on that topic — the topic mirrors the RabbitMQ exchange, so the same routing `Destination` works for both providers. Without a `Topic`, the Service Bus adapter consumes `Queue` directly.
+
+**Retries and dead-lettering.** A processor returning `Failed(reason, requeue: true)` is retried until the message has been delivered `MaxRetries` times; anything else that fails (`requeue: false`, retries exhausted, unhandled exception, or an undeserializable payload) is dead-lettered:
+
+| Provider | Retry mechanism | Dead-letter destination |
+|---|---|---|
+| RabbitMQ | Republished with an `x-retry-count` header | `{queue}.dlq` (via the `{queue}.dlx` exchange, declared automatically) |
+| Service Bus | Abandoned; broker `DeliveryCount` | The entity's built-in dead-letter sub-queue |
+| SQS | Visibility timeout reset to 0; `ApproximateReceiveCount` | `{queue}-dlq` (created automatically), with a `DeadLetterReason` attribute |
+
+> **Upgrading an existing RabbitMQ queue:** RabbitMQ can't add dead-letter settings to a queue that already exists. If the Worker fails with *"already exists without dead-letter settings"*, delete the queue once (management UI → Queues) and restart.
 
 ---
 
