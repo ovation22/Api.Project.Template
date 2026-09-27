@@ -213,6 +213,25 @@ public class List : ContextRepositoryTestBase
     }
 
     [Fact]
+    [Trait("Overload", "PaginatedSpecification<T>")]
+    public async Task WithPaginatedSpecification_WhenOffsetExceedsIntRange_ReturnsEmptyItems()
+    {
+        // Arrange
+        // (int.MaxValue - 1) * 100 overflows int; the offset must not wrap to a negative Skip.
+        Context.WeatherForecasts.Add(
+            new WeatherForecast { Date = new DateOnly(2025, 1, 1), TemperatureC = 5, SummaryId = 12 });
+        Context.SaveChanges();
+        var spec = new WeatherForecastPagedBySummarySpec(12, pageNumber: int.MaxValue, pageSize: 100);
+
+        // Act
+        var result = await Repository.ListAsync(spec, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Empty(result.Data);
+        Assert.Equal(1, result.Total);
+    }
+
+    [Fact]
     [Trait("Overload", "PaginatedSpecification<T, TResult>")]
     public async Task WithProjectedPaginatedSpecification_ReturnsCorrectProjectedPage()
     {

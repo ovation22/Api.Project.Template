@@ -1,4 +1,10 @@
+using Api.Project.Template.Application.Abstractions.Logging;
 using Api.Project.Template.Domain.Entities;
+using Api.Project.Template.Infrastructure.Data;
+using Api.Project.Template.Infrastructure.Data.Repositories;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Moq;
 
 namespace Api.Project.Template.Tests.Unit.Infrastructure.Data.ContextRepositoryTests;
 
@@ -26,6 +32,36 @@ public class Create : ContextRepositoryTestBase
 
         // Assert
         Assert.Contains(Context.WeatherForecasts, x => x == weatherForecast);
+    }
+
+    [Fact]
+    [Trait("Overload", "Single")]
+    public async Task Single_WhenSaveIsCanceled_RethrowsOperationCanceledException()
+    {
+        // Arrange
+        // Relational providers surface cancellation as OperationCanceledException (not TaskCanceledException),
+        // so simulate that directly rather than relying on the in-memory provider's behavior.
+        var options = new DbContextOptionsBuilder<ApiProjectTemplateContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .AddInterceptors(new CancelingSaveChangesInterceptor())
+            .Options;
+        await using var context = new ApiProjectTemplateContext(options);
+        var repository = new ApiProjectTemplateContextRepository(context, new Mock<ILoggerAdapter<EFRepository>>().Object);
+        var weatherForecast = new WeatherForecast { Date = new DateOnly(2025, 6, 3), TemperatureC = 16, SummaryId = 5 };
+
+        // Act
+        var act = () => repository.CreateAsync(weatherForecast, TestContext.Current.CancellationToken);
+
+        // Assert
+        // Cancellation must surface as-is, not wrapped in a generic Exception (which would become a 500).
+        await Assert.ThrowsAsync<OperationCanceledException>(act);
+    }
+
+    private sealed class CancelingSaveChangesInterceptor : SaveChangesInterceptor
+    {
+        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+            => throw new OperationCanceledException();
     }
 
     [Fact]

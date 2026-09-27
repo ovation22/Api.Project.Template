@@ -10,6 +10,11 @@ namespace Api.Project.Template.Application.Common.Pagination;
 public record PaginationRequest
 {
     /// <summary>
+    /// The largest page size a client may request.
+    /// </summary>
+    public const int MaxPageSize = 100;
+
+    /// <summary>
     /// Gets or initializes the page number for pagination.
     /// </summary>
     [Range(1, int.MaxValue, ErrorMessage = "Page number must be greater than 0.")]
@@ -18,7 +23,7 @@ public record PaginationRequest
     /// <summary>
     /// Gets or initializes the page size for pagination.
     /// </summary>
-    [Range(1, int.MaxValue, ErrorMessage = "Page size must be greater than 0.")]
+    [Range(1, MaxPageSize, ErrorMessage = "Page size must be between {1} and {2}.")]
     public int Size { get; init; } = 10;
 
     /// <summary>

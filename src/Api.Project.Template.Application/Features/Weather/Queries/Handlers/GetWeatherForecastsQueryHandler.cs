@@ -1,5 +1,6 @@
 using Api.Project.Template.Application.Abstractions;
 using Api.Project.Template.Application.Common.Pagination;
+using Api.Project.Template.Application.Common.Specifications;
 using Api.Project.Template.Application.Features.Weather.Events;
 using Api.Project.Template.Application.Features.Weather.Specifications;
 using Ardalis.Result;
@@ -14,7 +15,17 @@ public class GetWeatherForecastsQueryHandler(IRepository repository, IPublisher 
         GetWeatherForecastsQuery request,
         CancellationToken cancellationToken)
     {
-        var spec = new WeatherForecastFilterSpecification(request.PaginationRequest);
+        WeatherForecastFilterSpecification spec;
+        try
+        {
+            spec = new WeatherForecastFilterSpecification(request.PaginationRequest);
+        }
+        catch (InvalidSpecificationException ex)
+        {
+            return Result<PagedList<GetWeatherForecastsResponse>>.Invalid(
+                new ValidationError { Identifier = ex.PropertyName, ErrorMessage = ex.Message });
+        }
+
         var forecasts = await repository.ListAsync(spec, cancellationToken);
 
         // Contrived example to demonstrate MediatR's publish/subscribe capabilities.

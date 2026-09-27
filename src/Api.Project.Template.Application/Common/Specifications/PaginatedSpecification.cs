@@ -1,8 +1,6 @@
-﻿using Api.Project.Template.Application.Common.Pagination;
+using Api.Project.Template.Application.Common.Pagination;
 using Ardalis.Specification;
-using System.Globalization;
 using System.Linq.Expressions;
-using System.Reflection;
 
 namespace Api.Project.Template.Application.Common.Specifications;
 
@@ -12,6 +10,10 @@ namespace Api.Project.Template.Application.Common.Specifications;
 /// <typeparam name="T">The type of the entity.</typeparam>
 /// <param name="pageNumber">The page number.</param>
 /// <param name="pageSize">The page size.</param>
+/// <remarks>
+/// Sorting and filtering on client-supplied property names throws <see cref="InvalidSpecificationException"/>
+/// for unknown or computed properties, unconvertible values, and operators that don't fit the property type.
+/// </remarks>
 public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : Specification<T>, IPaginatedSpecification<T>
 {
     /// <inheritdoc />
@@ -21,186 +23,10 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
     public int PageSize { get; } = pageSize;
 
     /// <summary>
-    /// Checks if the specified property exists in the entity type <typeparamref name="T"/>.
-    /// </summary>
-    /// <param name="propertyName">The name of the property to check.</param>
-    /// <returns>True if the property exists; otherwise, false.</returns>
-    private static bool IsEntityProperty(string propertyName)
-    {
-        return GetPropertyExpression(propertyName) != null;
-    }
-
-    /// <summary>
-    /// Gets the property expression for the specified property.
-    /// </summary>
-    /// <param name="propertyName">The name of the property.</param>
-    /// <returns>The property expression if found; otherwise null.</returns>
-    private static PropertyInfo? GetPropertyExpression(string propertyName)
-    {
-        var properties = propertyName.Split('.');
-        var type = typeof(T);
-        PropertyInfo? property = null;
-
-        foreach (var prop in properties)
-        {
-            property = type.GetProperty(prop, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-
-            if (property == null)
-            {
-                return null;
-            }
-
-            type = property.PropertyType;
-        }
-
-        return property;
-    }
-
-    /// <summary>
-    /// Builds the filter expression based on the filter operator and value.
-    /// </summary>
-    /// <param name="filterBy">The property name to filter by.</param>
-    /// <param name="filter">The filter object containing the operator and value.</param>
-    /// <param name="propertyMappings">The custom property mappings dictionary.</param>
-    /// <returns>An expression representing the filter condition.</returns>
-    private static Expression<Func<T, bool>> BuildFilterExpression(string filterBy, Filter filter, Dictionary<string, string> propertyMappings)
-    {
-        var parameter = Expression.Parameter(typeof(T), "x");
-
-        // Map the filterBy to the actual property path if it exists in the dictionary
-        if (propertyMappings.TryGetValue(filterBy, out var actualPropertyPath))
-        {
-            filterBy = actualPropertyPath;
-        }
-
-        Expression property = parameter;
-
-        // Split the filterBy string into parts to handle nested properties
-        foreach (var member in filterBy.Split('.'))
-        {
-            property = Expression.Property(property, member);
-        }
-
-        var propertyType = Nullable.GetUnderlyingType(property.Type) ?? property.Type; // Handle nullable types
-        Expression body;
-
-        if (filter.Operator != FilterOperator.Between)
-        {
-            if (filter.Value == null)
-            {
-                throw new InvalidOperationException("Value is required for the selected operator.");
-            }
-
-            // Convert the constant to the appropriate type, including nullable if needed
-            var constantValue = ConvertValue(filter.Value, propertyType);
-            var constant = Expression.Constant(constantValue, propertyType); // Match constant type to property type
-
-            // Coalesce property to zero if it’s nullable
-            if (Nullable.GetUnderlyingType(property.Type) != null)
-            {
-                property = Expression.Coalesce(property, Expression.Constant(Convert.ChangeType(0, propertyType)));
-            }
-
-            body = filter.Operator switch
-            {
-                FilterOperator.Eq => Expression.Equal(property, constant),
-                FilterOperator.Ne => Expression.NotEqual(property, constant),
-                FilterOperator.Contains => Expression.Call(property, "Contains", null, constant),
-                FilterOperator.StartsWith => Expression.Call(property, "StartsWith", null, constant),
-                FilterOperator.EndsWith => Expression.Call(property, "EndsWith", null, constant),
-                FilterOperator.Gt => Expression.GreaterThan(property, constant),
-                FilterOperator.Gte => Expression.GreaterThanOrEqual(property, constant),
-                FilterOperator.Lt => Expression.LessThan(property, constant),
-                FilterOperator.Lte => Expression.LessThanOrEqual(property, constant),
-                _ => throw new NotSupportedException($"Filter operator ‘{filter.Operator}’ is not supported.")
-            };
-        }
-        else
-        {
-            if (filter.ValueFrom == null || filter.ValueTo == null)
-            {
-                throw new InvalidOperationException("ValueFrom and ValueTo are required for the selected operator.");
-            }
-
-            var fromConstantValue = ConvertValue(filter.ValueFrom, propertyType);
-            var toConstantValue = ConvertValue(filter.ValueTo, propertyType);
-
-            var fromConstant = Expression.Constant(fromConstantValue, propertyType);
-            var toConstant = Expression.Constant(toConstantValue, propertyType);
-
-            // Coalesce property to zero if it’s nullable
-            if (Nullable.GetUnderlyingType(property.Type) != null)
-            {
-                property = Expression.Coalesce(property, Expression.Constant(Convert.ChangeType(0, propertyType)));
-            }
-
-            body = Expression.AndAlso(
-                Expression.GreaterThanOrEqual(property, fromConstant),
-                Expression.LessThanOrEqual(property, toConstant)
-            );
-        }
-
-        return Expression.Lambda<Func<T, bool>>(body, parameter);
-    }
-
-    /// <summary>
-    /// Combines multiple filter expressions with an OR operator.
-    /// </summary>
-    /// <param name="filterExpressions">The filter expressions to combine.</param>
-    /// <returns>The combined filter expression with an OR operator.</returns>
-    private static Expression<Func<T, bool>> CombineFilterExpressionsWithOr(IEnumerable<Expression<Func<T, bool>>> filterExpressions)
-    {
-        var parameter = Expression.Parameter(typeof(T), "x");
-
-        // Start with 'false' so OR chain works
-        Expression combined = Expression.Constant(false);
-
-        combined = filterExpressions
-            .Select(expr => new ParameterReplacer(expr.Parameters[0], parameter).Visit(expr.Body)).Aggregate(combined,
-                Expression.OrElse);
-
-        return Expression.Lambda<Func<T, bool>>(combined, parameter);
-    }
-
-    /// <summary>
-    /// Converts a string value to the specified target type, with special handling for common date/time and GUID types.
-    /// </summary>
-    /// <param name="value">The string value to convert.</param>
-    /// <param name="targetType">The target type to convert to.</param>
-    /// <returns>The converted value.</returns>
-    private static object ConvertValue(string value, Type targetType)
-    {
-        if (targetType == typeof(DateOnly))
-            return DateOnly.Parse(value, CultureInfo.InvariantCulture);
-        if (targetType == typeof(TimeOnly))
-            return TimeOnly.Parse(value, CultureInfo.InvariantCulture);
-        if (targetType == typeof(Guid))
-            return Guid.Parse(value);
-        if (targetType == typeof(DateTimeOffset))
-            return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);
-        return Convert.ChangeType(value, targetType);
-    }
-
-    /// <summary>
-    /// Replaces one parameter expression with another within an expression tree.
-    /// </summary>
-    private sealed class ParameterReplacer(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
-    {
-        protected override Expression VisitParameter(ParameterExpression node)
-        {
-            return node == from ? to : base.VisitParameter(node);
-        }
-    }
-
-    /// <summary>
     /// Applies sorting logic based on entity properties.
     /// </summary>
     /// <param name="sortBy">The property to sort by.</param>
-    /// <param name="sortDirection">The direction of the sort. If "DESC", sorting is in descending order; otherwise, sorting is in ascending order.</param>
-    /// <remarks>
-    /// This method creates an order by expression for the specified property and applies it to the query. 
-    /// If the sort direction is "DESC", the query is ordered in descending order; otherwise, it is ordered in ascending order.
-    /// </remarks>
+    /// <param name="sortDirection">The direction of the sort.</param>
     protected void ApplySorting(string sortBy, SortDirection sortDirection)
     {
         ApplySorting(sortBy, sortDirection, new Dictionary<string, string>());
@@ -210,33 +36,23 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
     /// Applies sorting logic based on entity properties.
     /// </summary>
     /// <param name="sortBy">The property to sort by.</param>
-    /// <param name="sortDirection">The direction of the sort. If "DESC", sorting is in descending order; otherwise, sorting is in ascending order.</param>
+    /// <param name="sortDirection">The direction of the sort.</param>
     /// <param name="propertyMappings">The custom property mappings dictionary.</param>
     /// <remarks>
-    /// This method creates an order by expression for the specified property and applies it to the query. 
-    /// If the sort direction is "DESC", the query is ordered in descending order; otherwise, it is ordered in ascending order.
+    /// When the entity has an <c>Id</c> property, it is added as a secondary sort so that
+    /// pages are stable when the sort property has duplicate values.
     /// </remarks>
     protected void ApplySorting(string sortBy, SortDirection sortDirection, Dictionary<string, string> propertyMappings)
     {
-        if (propertyMappings.TryGetValue(sortBy, out var mappedProperty))
-        {
-            sortBy = mappedProperty;
-        }
+        var orderBy = SpecificationExpressions.CreateOrderBy<T>(sortBy, propertyMappings);
+        var ordered = sortDirection == SortDirection.Desc
+            ? Query.OrderByDescending(orderBy!)
+            : Query.OrderBy(orderBy!);
 
-        if (IsEntityProperty(sortBy))
+        var tieBreaker = SpecificationExpressions.CreateTieBreaker<T>(sortBy, propertyMappings);
+        if (tieBreaker != null)
         {
-            if (sortDirection == SortDirection.Desc)
-            {
-                Query.OrderByDescending(CreateOrderByExpression(sortBy)!);
-            }
-            else
-            {
-                Query.OrderBy(CreateOrderByExpression(sortBy)!);
-            }
-        }
-        else
-        {
-            throw new NotSupportedException($"Order By property '{sortBy}' is not supported.");
+            ordered.ThenBy(tieBreaker!);
         }
     }
 
@@ -246,21 +62,7 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
     /// <param name="propertyPath">The path of the property to order by, supporting dot notation for nested properties.</param>
     /// <returns>An expression representing the order by clause.</returns>
     protected static Expression<Func<T, object>> CreateOrderByExpression(string propertyPath)
-    {
-        var parameter = Expression.Parameter(typeof(T), "x");
-        Expression property = parameter;
-
-        // Split the propertyPath into parts to handle nested properties (e.g., "Book.Grade")
-        foreach (var member in propertyPath.Split('.'))
-        {
-            property = Expression.Property(property, member);
-        }
-
-        // Convert the property to type 'object' to match the return type
-        var propertyAsObject = Expression.Convert(property, typeof(object));
-
-        return Expression.Lambda<Func<T, object>>(propertyAsObject, parameter);
-    }
+        => SpecificationExpressions.CreateOrderBy<T>(propertyPath, []);
 
     /// <summary>
     /// Applies filters with an OR logic.
@@ -278,12 +80,11 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
     /// <param name="propertyMappings">The custom property mappings dictionary.</param>
     protected void ApplyOrFilters(Dictionary<string, Filter> filters, Dictionary<string, string> propertyMappings)
     {
-        var filterList = filters.ToList();
-        var filterExpressions = filterList.Select(filter =>
-            PaginatedSpecification<T>.BuildFilterExpression(filter.Key, filter.Value, propertyMappings));
+        var filterExpressions = filters
+            .Select(filter => SpecificationExpressions.CreateFilter<T>(filter.Key, filter.Value, propertyMappings))
+            .ToList();
 
-        var combinedFilterExpression = CombineFilterExpressionsWithOr(filterExpressions);
-        Query.Where(combinedFilterExpression);
+        Query.Where(SpecificationExpressions.CombineWithOr(filterExpressions));
     }
 
     /// <summary>
@@ -302,10 +103,9 @@ public abstract class PaginatedSpecification<T>(int pageNumber, int pageSize) : 
     /// <param name="propertyMappings">The custom property mappings dictionary.</param>
     protected void ApplyAndFilters(Dictionary<string, Filter> filters, Dictionary<string, string> propertyMappings)
     {
-        foreach (var filterExpression in filters.Select(filter =>
-                    PaginatedSpecification<T>.BuildFilterExpression(filter.Key, filter.Value, propertyMappings)))
+        foreach (var filter in filters)
         {
-            Query.Where(filterExpression);
+            Query.Where(SpecificationExpressions.CreateFilter<T>(filter.Key, filter.Value, propertyMappings));
         }
     }
 }
@@ -327,183 +127,37 @@ public abstract class PaginatedSpecification<T, TResult>(int pageNumber, int pag
     /// <inheritdoc />
     public int PageSize { get; } = pageSize;
 
-    /// <inheritdoc cref="PaginatedSpecification{T}.IsEntityProperty(string)"/>
-    private static bool IsEntityProperty(string propertyName)
-        => GetPropertyExpression(propertyName) != null;
-
-    /// <inheritdoc cref="PaginatedSpecification{T}.GetPropertyExpression(string)"/>
-    private static PropertyInfo? GetPropertyExpression(string propertyName)
-    {
-        var properties = propertyName.Split('.');
-        var type = typeof(T);
-        PropertyInfo? property = null;
-
-        foreach (var prop in properties)
-        {
-            property = type.GetProperty(prop, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
-            if (property == null)
-            {
-                return null;
-            }
-
-            type = property.PropertyType;
-        }
-
-        return property;
-    }
-
-    /// <inheritdoc cref="PaginatedSpecification{T}.BuildFilterExpression(string, Filter, Dictionary{string,string})"/>
-    private static Expression<Func<T, bool>> BuildFilterExpression(string filterBy, Filter filter, Dictionary<string, string> propertyMappings)
-    {
-        var parameter = Expression.Parameter(typeof(T), "x");
-        if (propertyMappings.TryGetValue(filterBy, out var actualPropertyPath))
-        {
-            filterBy = actualPropertyPath;
-        }
-
-        Expression property = filterBy.Split('.')
-            .Aggregate<string?, Expression>(parameter, Expression.Property!);
-
-        var propertyType = Nullable.GetUnderlyingType(property.Type) ?? property.Type;
-        Expression body;
-
-        if (filter.Operator != FilterOperator.Between)
-        {
-            if (filter.Value == null)
-            {
-                throw new InvalidOperationException("Value is required for the selected operator.");
-            }
-
-            var constantValue = ConvertValue(filter.Value, propertyType);
-            var constant = Expression.Constant(constantValue, propertyType);
-
-            if (Nullable.GetUnderlyingType(property.Type) != null)
-            {
-                property = Expression.Coalesce(property, Expression.Constant(Convert.ChangeType(0, propertyType)));
-            }
-
-            body = filter.Operator switch
-            {
-                FilterOperator.Eq => Expression.Equal(property, constant),
-                FilterOperator.Ne => Expression.NotEqual(property, constant),
-                FilterOperator.Contains => Expression.Call(property, "Contains", null, constant),
-                FilterOperator.StartsWith => Expression.Call(property, "StartsWith", null, constant),
-                FilterOperator.EndsWith => Expression.Call(property, "EndsWith", null, constant),
-                FilterOperator.Gt => Expression.GreaterThan(property, constant),
-                FilterOperator.Gte => Expression.GreaterThanOrEqual(property, constant),
-                FilterOperator.Lt => Expression.LessThan(property, constant),
-                FilterOperator.Lte => Expression.LessThanOrEqual(property, constant),
-                _ => throw new NotSupportedException($"Filter operator '{filter.Operator}' is not supported.")
-            };
-        }
-        else
-        {
-            if (filter.ValueFrom == null || filter.ValueTo == null)
-            {
-                throw new InvalidOperationException("ValueFrom and ValueTo are required for the selected operator.");
-            }
-
-            var fromConstantValue = ConvertValue(filter.ValueFrom, propertyType);
-            var toConstantValue = ConvertValue(filter.ValueTo, propertyType);
-
-            var fromConstant = Expression.Constant(fromConstantValue, propertyType);
-            var toConstant = Expression.Constant(toConstantValue, propertyType);
-
-            if (Nullable.GetUnderlyingType(property.Type) != null)
-            {
-                property = Expression.Coalesce(property, Expression.Constant(Convert.ChangeType(0, propertyType)));
-            }
-
-            body = Expression.AndAlso(
-                Expression.GreaterThanOrEqual(property, fromConstant),
-                Expression.LessThanOrEqual(property, toConstant)
-            );
-        }
-
-        return Expression.Lambda<Func<T, bool>>(body, parameter);
-    }
-
-    /// <inheritdoc cref="PaginatedSpecification{T}.ConvertValue(string, Type)"/>
-    private static object ConvertValue(string value, Type targetType)
-    {
-        if (targetType == typeof(DateOnly))
-            return DateOnly.Parse(value, CultureInfo.InvariantCulture);
-        if (targetType == typeof(TimeOnly))
-            return TimeOnly.Parse(value, CultureInfo.InvariantCulture);
-        if (targetType == typeof(Guid))
-            return Guid.Parse(value);
-        if (targetType == typeof(DateTimeOffset))
-            return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture);
-        return Convert.ChangeType(value, targetType);
-    }
-
-    /// <inheritdoc cref="PaginatedSpecification{T}.CreateOrderByExpression(string)"/>
-    private static Expression<Func<T, object>> CreateOrderByExpression(string propertyPath)
-    {
-        var parameter = Expression.Parameter(typeof(T), "x");
-        Expression property = propertyPath.Split('.')
-            .Aggregate<string?, Expression>(parameter, Expression.Property!);
-        var propertyAsObject = Expression.Convert(property, typeof(object));
-
-        return Expression.Lambda<Func<T, object>>(propertyAsObject, parameter);
-    }
-
     /// <inheritdoc cref="PaginatedSpecification{T}.ApplySorting(string, SortDirection, Dictionary{string,string})"/>
     protected void ApplySorting(string sortBy, SortDirection sortDirection, Dictionary<string, string> propertyMappings)
     {
-        if (propertyMappings.TryGetValue(sortBy, out var mapped))
-        {
-            sortBy = mapped;
-        }
+        var orderBy = SpecificationExpressions.CreateOrderBy<T>(sortBy, propertyMappings);
+        var ordered = sortDirection == SortDirection.Desc
+            ? Query.OrderByDescending(orderBy!)
+            : Query.OrderBy(orderBy!);
 
-        if (IsEntityProperty(sortBy))
+        var tieBreaker = SpecificationExpressions.CreateTieBreaker<T>(sortBy, propertyMappings);
+        if (tieBreaker != null)
         {
-            if (sortDirection == SortDirection.Desc)
-            {
-                Query.OrderByDescending(CreateOrderByExpression(sortBy)!);
-            }
-            else
-            {
-                Query.OrderBy(CreateOrderByExpression(sortBy)!);
-            }
+            ordered.ThenBy(tieBreaker!);
         }
-        else
-        {
-            throw new NotSupportedException($"Order By property '{sortBy}' is not supported.");
-        }
-    }
-
-    /// <inheritdoc cref="PaginatedSpecification{T}.CombineFilterExpressionsWithOr(IEnumerable{Expression{Func{T,bool}}})"/>
-    private static Expression<Func<T, bool>> CombineFilterExpressionsWithOr(IEnumerable<Expression<Func<T, bool>>> filterExpressions)
-    {
-        var parameter = Expression.Parameter(typeof(T), "x");
-        Expression combined = Expression.Constant(false);
-        combined = filterExpressions
-            .Select(expr => new ParameterReplacer(expr.Parameters[0], parameter).Visit(expr.Body)!).Aggregate(combined,
-                Expression.OrElse);
-
-        return Expression.Lambda<Func<T, bool>>(combined, parameter);
     }
 
     /// <inheritdoc cref="PaginatedSpecification{T}.ApplyOrFilters(Dictionary{string,Filter}, Dictionary{string,string})"/>
     protected void ApplyOrFilters(Dictionary<string, Filter> filters, Dictionary<string, string> propertyMappings)
     {
-        var filterList = filters.ToList();
-        var filterExpressions = filterList.Select(filter => BuildFilterExpression(filter.Key, filter.Value, propertyMappings));
-        var combinedFilterExpression = CombineFilterExpressionsWithOr(filterExpressions);
-        Query.Where(combinedFilterExpression);
+        var filterExpressions = filters
+            .Select(filter => SpecificationExpressions.CreateFilter<T>(filter.Key, filter.Value, propertyMappings))
+            .ToList();
+
+        Query.Where(SpecificationExpressions.CombineWithOr(filterExpressions));
     }
 
     /// <inheritdoc cref="PaginatedSpecification{T}.ApplyAndFilters(Dictionary{string,Filter}, Dictionary{string,string})"/>
     protected void ApplyAndFilters(Dictionary<string, Filter> filters, Dictionary<string, string> propertyMappings)
     {
-        foreach (var filterExpression in filters.Select(filter => BuildFilterExpression(filter.Key, filter.Value, propertyMappings)))
-            Query.Where(filterExpression);
-    }
-
-    /// <inheritdoc cref="PaginatedSpecification{T}.ParameterReplacer"/>
-    private sealed class ParameterReplacer(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
-    {
-        protected override Expression VisitParameter(ParameterExpression node) => node == from ? to : base.VisitParameter(node);
+        foreach (var filter in filters)
+        {
+            Query.Where(SpecificationExpressions.CreateFilter<T>(filter.Key, filter.Value, propertyMappings));
+        }
     }
 }

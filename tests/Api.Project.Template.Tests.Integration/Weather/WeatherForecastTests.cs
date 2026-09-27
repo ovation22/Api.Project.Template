@@ -245,4 +245,63 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
             (f.TemperatureC < 0 || f.Summary.Contains("zing", StringComparison.OrdinalIgnoreCase))
                 .Should().BeTrue());
     }
+
+    [Theory]
+    [Trait("Category", "Validation")]
+    [InlineData("/weatherforecast?SortBy=Nope")]
+    [InlineData("/weatherforecast?SortBy=TemperatureF")]
+    [InlineData("/weatherforecast?Filters[Nope].Operator=Eq&Filters[Nope].Value=1")]
+    [InlineData("/weatherforecast?Filters[TemperatureC].Operator=Eq&Filters[TemperatureC].Value=abc")]
+    [InlineData("/weatherforecast?Filters[Summary].Operator=Gt&Filters[Summary].Value=a")]
+    [InlineData("/weatherforecast?Filters[TemperatureC].Operator=Contains&Filters[TemperatureC].Value=1")]
+    [InlineData("/weatherforecast?size=101")]
+    public async Task Get_InvalidQuery_ReturnsBadRequest(string url)
+    {
+        // Arrange
+
+        // Act
+        var response = await _client.GetAsync(url, TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Category", "Pagination")]
+    public async Task Get_PageFarBeyondData_ReturnsEmptyPage()
+    {
+        // Arrange
+        // (int.MaxValue - 1) * 100 overflows a 32-bit offset.
+
+        // Act
+        var result = await _client.GetFromJsonAsync<PagedResponse<GetWeatherForecastsResponse>>(
+            $"/weatherforecast?page={int.MaxValue}&size=100",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        result!.Total.Should().Be(50);
+        result.Data.Should().BeEmpty();
+    }
+
+    [Fact]
+    [Trait("Category", "Pagination")]
+    public async Task Get_AllPages_ReturnEachForecastExactlyOnce()
+    {
+        // Arrange
+        // The default sort (Date) has 10 rows per date, so paging relies on the Id tie-breaker.
+        var seen = new List<(DateOnly, string)>();
+
+        // Act
+        for (var page = 1; page <= 5; page++)
+        {
+            var result = await _client.GetFromJsonAsync<PagedResponse<GetWeatherForecastsResponse>>(
+                $"/weatherforecast?page={page}&size=10",
+                TestContext.Current.CancellationToken);
+            seen.AddRange(result!.Data.Select(f => (f.Date, f.Summary)));
+        }
+
+        // Assert
+        // Each (Date, Summary) pair is unique in the seed data.
+        seen.Should().HaveCount(50).And.OnlyHaveUniqueItems();
+    }
 }
