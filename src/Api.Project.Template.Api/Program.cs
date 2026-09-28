@@ -38,24 +38,10 @@ public class Program
             else
                 builder.AddSqlServerDatabaseContext();
 
-            var messagingProvider = builder.Configuration["MessagingProvider"] ?? "None";
-
-            if (messagingProvider == "RabbitMq")
-                builder.AddRabbitMqMessageBus();
-            else if (messagingProvider == "ServiceBus")
-                builder.AddServiceBusMessageBus();
-            else if (messagingProvider == "Sqs")
-                builder.AddSqsMessageBus();
-            else
-                builder.AddNullMessageBus();
+            builder.AddMessaging();
 
             builder.Services.AddInfrastructure();
             builder.Services.AddApplication();
-
-            if (isPostgreSql)
-                builder.Services.AddPostgreSqlHealthChecks(builder.Configuration);
-            else
-                builder.Services.AddSqlServerHealthChecks(builder.Configuration);
 
             builder.Services.AddHttpContextAccessor();
 

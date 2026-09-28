@@ -5,23 +5,29 @@ namespace Api.Project.Template.Api.Config;
 
 public static class MessagingConfig
 {
-    public static void AddNullMessageBus(this IHostApplicationBuilder builder)
+    /// <summary>
+    /// Registers the message publisher for the configured <c>MessagingProvider</c>:
+    /// "None" (or unset) registers a no-op publisher; "RabbitMq", "ServiceBus" or "Sqs" registers that broker
+    /// (the value is case-insensitive). Any other value fails at startup rather than silently disabling messaging.
+    /// </summary>
+    public static void AddMessaging(this IHostApplicationBuilder builder)
     {
-        builder.Services.AddSingleton<IMessagePublisher, NullMessagePublisher>();
-    }
+        var messagingProvider = builder.Configuration["MessagingProvider"];
 
-    public static void AddRabbitMqMessageBus(this IHostApplicationBuilder builder)
-    {
-        builder.Services.AddMessageBus(builder.Configuration);
-    }
+        switch (messagingProvider?.ToLowerInvariant())
+        {
+            case null or "" or "none":
+                builder.Services.AddSingleton<IMessagePublisher, NullMessagePublisher>();
+                break;
 
-    public static void AddServiceBusMessageBus(this IHostApplicationBuilder builder)
-    {
-        builder.Services.AddMessageBus(builder.Configuration);
-    }
+            // AddMessageBus resolves the same provider from MessagingProvider
+            case "rabbitmq" or "servicebus" or "sqs":
+                builder.Services.AddMessageBus(builder.Configuration);
+                break;
 
-    public static void AddSqsMessageBus(this IHostApplicationBuilder builder)
-    {
-        builder.Services.AddMessageBus(builder.Configuration);
+            default:
+                throw new InvalidOperationException(
+                    $"Invalid MessagingProvider value: '{messagingProvider}'. Valid values: 'None', 'RabbitMq', 'ServiceBus', 'Sqs'.");
+        }
     }
 }

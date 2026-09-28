@@ -19,10 +19,12 @@ public class RequiredIfNotAttribute(string otherProperty, object valueToCheck) :
         if (otherPropertyValue != null && !otherPropertyValue.Equals(valueToCheck))
         {
             // If the other property value is not equal to the specified value,
-            // then the current property is required
-            return value != null
-                ? ValidationResult.Success
-                : new ValidationResult(ErrorMessage ?? $"{validationContext.DisplayName} is required.");
+            // then the current property is required (blank strings count as missing, as in RequiredIf)
+            return value == null || string.IsNullOrWhiteSpace(value.ToString())
+                ? new ValidationResult(
+                    ErrorMessage ?? $"{validationContext.DisplayName} is required.",
+                    validationContext.MemberName is { } memberName ? [memberName] : null)
+                : ValidationResult.Success;
         }
 
         // If the other property value is equal to the specified value,
