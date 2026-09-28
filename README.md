@@ -574,6 +574,8 @@ Tests.Integration/
 ├── CustomWebApplicationFactory.cs
 ├── Data/
 │   └── TransactionManagerTests.cs
+├── Health/
+│   └── HealthCheckTests.cs
 └── Weather/
     └── WeatherForecastTests.cs
 ```

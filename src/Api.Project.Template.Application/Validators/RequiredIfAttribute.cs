@@ -27,7 +27,9 @@ public class RequiredIfAttribute(string propertyName, object desiredValue) : Val
 
         if (value == null || string.IsNullOrWhiteSpace(value.ToString()))
         {
-            return new ValidationResult(ErrorMessage ?? $"{validationContext.DisplayName} is required.");
+            return new ValidationResult(
+                ErrorMessage ?? $"{validationContext.DisplayName} is required.",
+                validationContext.MemberName is { } memberName ? [memberName] : null);
         }
 
         return ValidationResult.Success;

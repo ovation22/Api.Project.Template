@@ -11,13 +11,10 @@
     <PackageVersion Include="Aspire.Hosting.SqlServer" Version="13.5.4" />
     <PackageVersion Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" Version="13.5.4" />
     <PackageVersion Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.5.4" />
-    <PackageVersion Include="Aspire.RabbitMQ.Client" Version="13.5.4" />
     <!-- API -->
     <PackageVersion Include="Ardalis.Result" Version="10.1.0" />
     <PackageVersion Include="Ardalis.Result.AspNetCore" Version="10.1.0" />
     <PackageVersion Include="Ardalis.Specification" Version="9.3.1" />
-    <PackageVersion Include="AspNetCore.HealthChecks.Npgsql" Version="9.0.0" />
-    <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- MediatR pinned to 12.x: 13+ requires a commercial license -->

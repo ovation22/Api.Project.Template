@@ -77,24 +77,52 @@ public static class TestSupport
     /// Docker Desktop / Rancher Desktop on Windows occasionally return a malformed response over the
     /// named pipe ("Invalid chunk header"), which fails an otherwise healthy start.
     /// </summary>
-    public static async Task<TContainer> StartContainerAsync<TContainer>(Func<TContainer> build, int attempts = 5)
-        where TContainer : DotNet.Testcontainers.Containers.IContainer
+    /// <summary>
+    /// Removes a container, ignoring Docker API errors: a failed cleanup shouldn't fail a run whose tests
+    /// passed, and Testcontainers' reaper (Ryuk) removes leftover containers when the run ends.
+    /// </summary>
+    public static async Task StopContainerAsync(DotNet.Testcontainers.Containers.IContainer container)
     {
-        for (var attempt = 1; ; attempt++)
+        try
         {
-            var container = build();
-            try
-            {
-                await container.StartAsync();
-                return container;
-            }
-            catch (Exception) when (attempt < attempts)
-            {
-                await container.DisposeAsync();
-                await Task.Delay(TimeSpan.FromSeconds(attempt));
-            }
+            await container.DisposeAsync();
+        }
+        catch (Exception)
+        {
+            // Left to Ryuk
         }
     }
+
+    public static async Task<TContainer> StartContainerAsync<TContainer>(Func<TContainer> build, int attempts = 8)
+        where TContainer : DotNet.Testcontainers.Containers.IContainer
+    {
+        // One container start at a time: concurrent Docker API calls over the Windows named pipe are what
+        // trigger the malformed responses, and the collections' fixtures otherwise start in parallel.
+        await ContainerStartLock.WaitAsync();
+        try
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                var container = build();
+                try
+                {
+                    await container.StartAsync();
+                    return container;
+                }
+                catch (Exception) when (attempt < attempts)
+                {
+                    await StopContainerAsync(container);
+                    await Task.Delay(TimeSpan.FromSeconds(Math.Min(attempt * 2, 10)));
+                }
+            }
+        }
+        finally
+        {
+            ContainerStartLock.Release();
+        }
+    }
+
+    private static readonly SemaphoreSlim ContainerStartLock = new(1, 1);
 
     /// <summary>
     /// Polls <paramref name="probe"/> until <paramref name="isDone"/> holds or the timeout elapses,

@@ -18,23 +18,22 @@ builder.Logging.AddSerilog(Log.Logger);
 
 builder.Services.AddSingleton(typeof(ILoggerAdapter<>), typeof(LoggerAdapter<>));
 
-var messagingProvider = builder.Configuration["MessagingProvider"] ?? "None";
+// "None" (or unset) runs no consumers. The broker is resolved from MessagingProvider by AddMessageBus.
+var messagingProvider = builder.Configuration["MessagingProvider"];
 
-if (messagingProvider == "RabbitMq")
+switch (messagingProvider?.ToLowerInvariant())
 {
-    builder.AddRabbitMQClient(connectionName: "messaging");
-    builder.Services.AddMessageBus(builder.Configuration);
-    builder.Services.AddMessageConsumer<WeatherRequested, WeatherRequestProcessor, Worker>();
-}
-else if (messagingProvider == "ServiceBus")
-{
-    builder.Services.AddMessageBus(builder.Configuration);
-    builder.Services.AddMessageConsumer<WeatherRequested, WeatherRequestProcessor, Worker>();
-}
-else if (messagingProvider == "Sqs")
-{
-    builder.Services.AddMessageBus(builder.Configuration);
-    builder.Services.AddMessageConsumer<WeatherRequested, WeatherRequestProcessor, Worker>();
+    case null or "" or "none":
+        break;
+
+    case "rabbitmq" or "servicebus" or "sqs":
+        builder.Services.AddMessageBus(builder.Configuration);
+        builder.Services.AddMessageConsumer<WeatherRequested, WeatherRequestProcessor, Worker>();
+        break;
+
+    default:
+        throw new InvalidOperationException(
+            $"Invalid MessagingProvider value: '{messagingProvider}'. Valid values: 'None', 'RabbitMq', 'ServiceBus', 'Sqs'.");
 }
 
 try

@@ -94,7 +94,7 @@ public record Filter
     /// Gets or initializes the value to filter by.
     /// </summary>
     [RequiredIfNot(nameof(Operator), FilterOperator.Between)]
-    public string? Value { get; init; } = null!;
+    public string? Value { get; init; }
 
     /// <summary>
     /// Gets or initializes the range values for between filter.

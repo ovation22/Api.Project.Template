@@ -28,7 +28,7 @@ public sealed class LocalStackFixture : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         if (_container != null)
-            await _container.DisposeAsync();
+            await TestSupport.StopContainerAsync(_container);
     }
 
     // ServiceURL alone (no RegionEndpoint): setting RegionEndpoint afterwards would override the endpoint.

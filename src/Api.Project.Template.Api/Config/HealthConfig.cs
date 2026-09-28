@@ -5,30 +5,20 @@ namespace Api.Project.Template.Api.Config;
 
 public static class HealthConfig
 {
-    public static void AddSqlServerHealthChecks(this IServiceCollection services, IConfiguration configuration)
-    {
-        var connectionString = configuration.GetConnectionString("ApiProjectTemplate")
-            ?? throw new InvalidOperationException("Connection string 'ApiProjectTemplate' is not configured.");
-
-        services.AddHealthChecks()
-            .AddSqlServer(connectionString);
-    }
-
-    public static void AddPostgreSqlHealthChecks(this IServiceCollection services, IConfiguration configuration)
-    {
-        var connectionString = configuration.GetConnectionString("ApiProjectTemplate")
-            ?? throw new InvalidOperationException("Connection string 'ApiProjectTemplate' is not configured.");
-
-        services.AddHealthChecks()
-            .AddNpgSql(connectionString);
-    }
+    // The database check comes from Aspire's AddSqlServerDbContext / AddNpgsqlDbContext (one per DbContext),
+    // so no provider-specific health check is registered here.
 
     public static void UseHealthCheckConfig(this WebApplication app)
     {
-        app.MapHealthChecks("/healthz/ready", new HealthCheckOptions
+        // The detailed JSON (check names, durations, exception messages) is only returned in Development;
+        // elsewhere the endpoint answers with just Healthy / Degraded / Unhealthy.
+        var readiness = new HealthCheckOptions();
+        if (app.Environment.IsDevelopment())
         {
-            ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-        });
+            readiness.ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse;
+        }
+
+        app.MapHealthChecks("/healthz/ready", readiness);
 
         app.MapHealthChecks("/healthz/live", new HealthCheckOptions
         {

@@ -19,7 +19,7 @@ public sealed class RabbitMqFixture : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         if (_container != null)
-            await _container.DisposeAsync();
+            await TestSupport.StopContainerAsync(_container);
     }
 
     public async Task<IConnection> CreateConnectionAsync()
