@@ -52,6 +52,15 @@ jobs:
             --configuration Release --no-build
             -- -trx TestResults/integration.trx"
 
+        - name: Run messaging integration tests
+          run: >
+            dotnet-coverage collect
+            --output TestResults/messaging.cobertura.xml
+            --output-format cobertura
+            "dotnet run --project tests/Api.Project.Template.Tests.Integration.Messaging
+            --configuration Release --no-build
+            -- -trx TestResults/messaging.trx"
+
         - name: Publish test results
           uses: EnricoMi/publish-unit-test-result-action@v2
           if: always()

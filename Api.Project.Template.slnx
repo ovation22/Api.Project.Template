@@ -17,6 +17,7 @@
     <Project Path="tests/Api.Project.Template.Tests.Architecture/Api.Project.Template.Tests.Architecture.csproj" Id="21f69fb6-32cb-4c08-964f-96e91791c92f" />
     <Project Path="tests/Api.Project.Template.Tests.Benchmark/Api.Project.Template.Tests.Benchmark.csproj" Id="3614fa15-1397-42c2-b4f0-e2f6766c31f2" />
     <Project Path="tests/Api.Project.Template.Tests.Integration/Api.Project.Template.Tests.Integration.csproj" Id="b7ea2c13-bd12-4268-bc72-0cd2ffcb8c8a" />
+    <Project Path="tests/Api.Project.Template.Tests.Integration.Messaging/Api.Project.Template.Tests.Integration.Messaging.csproj" />
     <Project Path="tests/Api.Project.Template.Tests.Unit/Api.Project.Template.Tests.Unit.csproj" />
   </Folder>
 </Solution>

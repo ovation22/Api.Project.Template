@@ -1,4 +1,5 @@
 using Api.Project.Template.Domain.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Api.Project.Template.Tests.Unit.Infrastructure.Data.ContextRepositoryTests;
 
@@ -29,7 +30,10 @@ public class Update : ContextRepositoryTestBase
         await Repository.UpdateAsync(weatherForecast, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Contains(Context.WeatherForecasts, x => x.Id == weatherForecast.Id && x.SummaryId == 2);
+        // AsNoTracking reads the stored row; a tracked query would return the already-modified instance.
+        var stored = await Context.WeatherForecasts.AsNoTracking()
+            .SingleAsync(x => x.Id == weatherForecast.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(2, stored.SummaryId);
     }
 
     [Fact]
@@ -76,8 +80,12 @@ public class Update : ContextRepositoryTestBase
         await Repository.UpdateAsync(forecasts, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.All(forecasts, f =>
-            Assert.Contains(Context.WeatherForecasts, x => x.Id == f.Id && x.SummaryId == 4));
+        var ids = forecasts.Select(f => f.Id).ToList();
+        var stored = await Context.WeatherForecasts.AsNoTracking()
+            .Where(x => ids.Contains(x.Id))
+            .ToListAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(2, stored.Count);
+        Assert.All(stored, x => Assert.Equal(4, x.SummaryId));
     }
 
     [Fact]

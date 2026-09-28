@@ -243,6 +243,7 @@ src/
 tests/
 ├── Api.Project.Template.Tests.Unit         # Unit tests — xUnit v3, Moq, FluentAssertions
 ├── Api.Project.Template.Tests.Integration  # Integration tests — xUnit v3, SQLite, WebApplicationFactory
+├── Api.Project.Template.Tests.Integration.Messaging # Broker adapter tests — xUnit v3, Testcontainers (Docker)
 ├── Api.Project.Template.Tests.Architecture # Architectural rule enforcement — NetArchTest
 └── Api.Project.Template.Tests.Benchmark    # Performance benchmarks — BenchmarkDotNet
 ```
@@ -539,8 +540,33 @@ Test the full request pipeline — controller → MediatR → handler → servic
 ```
 Tests.Integration/
 ├── CustomWebApplicationFactory.cs
+├── Data/
+│   └── TransactionManagerTests.cs
 └── Weather/
     └── WeatherForecastTests.cs
+```
+
+### Messaging Integration Tests (`Tests.Integration.Messaging`)
+
+Test the broker adapters against real brokers — RabbitMQ and SQS (LocalStack) — started in Docker by [Testcontainers](https://dotnet.testcontainers.org/). Retries, dead-lettering and shutdown behavior depend on the broker itself, so they can't be meaningfully mocked.
+
+**Requires Docker** (Docker Desktop, Rancher Desktop, or Docker on Linux). Each test class starts one container and every test uses its own uniquely named queue; containers are removed automatically when the run ends. The first run pulls the images, so it takes longer.
+
+```powershell
+dotnet test --project tests/Api.Project.Template.Tests.Integration.Messaging
+```
+
+Service Bus is not covered here: its emulator needs two containers (Service Bus + SQL Server) and about a minute to start. Its topic/queue selection is unit-tested instead, and its retry/dead-letter handling is the Service Bus SDK's own.
+
+```
+Tests.Integration.Messaging/
+├── TestSupport.cs          # Recording handler, polling helper, container start with retry
+├── RabbitMq/
+│   ├── RabbitMqFixture.cs
+│   └── RabbitMqBrokerAdapterTests.cs
+└── Sqs/
+    ├── LocalStackFixture.cs
+    └── SqsBrokerAdapterTests.cs
 ```
 
 ### Architecture Tests (`Tests.Architecture`)

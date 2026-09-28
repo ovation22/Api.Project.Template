@@ -258,6 +258,36 @@ public class GenericMessageConsumerTests
         Assert.Equal("Test exception", result.ErrorReason);
     }
 
+    [Fact]
+    public async Task StartAsync_PassesServiceBusTopicAndSubscriptionToAdapter()
+    {
+        // Arrange
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:servicebus"] = "Endpoint=sb://localhost/",
+                ["MessageBus:Consumer:Queue"] = "weather-requests",
+                ["MessageBus:ServiceBus:Topic"] = "apiprojecttemplate.events",
+                ["MessageBus:ServiceBus:SubscriptionName"] = "weather-sub"
+            })
+            .Build();
+        var scopeFactory = _services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+        MessageBrokerConfig? captured = null;
+        _mockAdapter.Setup(a => a.ConnectAsync(It.IsAny<MessageBrokerConfig>(), It.IsAny<CancellationToken>()))
+            .Callback<MessageBrokerConfig, CancellationToken>((config, _) => captured = config)
+            .Returns(Task.CompletedTask);
+        var consumer = new GenericMessageConsumer<TestMessage, IMessageProcessor<TestMessage>>(
+            _mockAdapter.Object, configuration, scopeFactory, _logger.Object);
+
+        // Act
+        await consumer.StartAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.NotNull(captured);
+        Assert.Equal("apiprojecttemplate.events", captured.ProviderSpecific["Topic"]);
+        Assert.Equal("weather-sub", captured.ProviderSpecific["SubscriptionName"]);
+    }
+
     // Helper methods
 
     private static IConfiguration CreateTestConfiguration()

@@ -206,7 +206,11 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
     {
         // Arrange
         // TemperatureC > 20 AND Summary contains "arm" (matches "Warm").
-        // Warm range is 20-24 inclusive via random; TemperatureC > 20 narrows to 21-24.
+        // Warm temperatures are random in 20-24, so derive the expected count from the Warm rows.
+        var warm = await _client.GetFromJsonAsync<PagedResponse<GetWeatherForecastsResponse>>(
+            "/weatherforecast?size=50&Filters[Summary].Operator=Eq&Filters[Summary].Value=Warm",
+            TestContext.Current.CancellationToken);
+        var expected = warm!.Data.Count(f => f.TemperatureC > 20);
 
         // Act
         var result = await _client.GetFromJsonAsync<PagedResponse<GetWeatherForecastsResponse>>(
@@ -216,7 +220,8 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
             TestContext.Current.CancellationToken);
 
         // Assert
-        result!.Total.Should().BeGreaterThanOrEqualTo(0);
+        warm.Total.Should().Be(5);
+        result!.Total.Should().Be(expected);
         result.Data.Should().AllSatisfy(f =>
         {
             f.TemperatureC.Should().BeGreaterThan(20);

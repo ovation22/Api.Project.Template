@@ -24,6 +24,11 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
     private string? _queueName;
     private int _maxRetries;
 
+    /// <summary>
+    /// The entity the processor reads from (a queue, or "{topic}/Subscriptions/{subscription}"). For tests.
+    /// </summary>
+    internal string? EntityPath => _processor?.EntityPath;
+
     /// <inheritdoc/>
     /// <remarks>
     /// For Azure Service Bus, this method creates the <see cref="ServiceBusClient"/> and configures
