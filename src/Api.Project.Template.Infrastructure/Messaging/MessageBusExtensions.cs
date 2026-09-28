@@ -131,7 +131,7 @@ public static class MessageBusExtensions
             "rabbitmq" => "RabbitMq",
             "servicebus" => "ServiceBus",
             "sqs" => "Sqs",
-            "auto" or null or "" => DetectProvider(configuration),
+            "auto" or null or "" => ProviderFromMessagingProvider(configuration) ?? DetectProvider(configuration),
             _ => throw new InvalidOperationException(
                 $"Invalid MessageBus:Routing:Provider value: '{providerValue}'. " +
                 $"Valid values: 'RabbitMq', 'ServiceBus', 'Sqs', 'Auto'")
@@ -206,6 +206,20 @@ public static class MessageBusExtensions
 
         services.AddTransient<IMessageBrokerAdapter, SqsBrokerAdapter>();
     }
+
+    /// <summary>
+    /// The provider named by the top-level <c>MessagingProvider</c> setting (the one the AppHost passes to
+    /// every project), or null when it's unset or "None". Checked before connection-string detection so a
+    /// leftover connection string for another broker can't switch providers.
+    /// </summary>
+    internal static string? ProviderFromMessagingProvider(IConfiguration configuration)
+        => configuration["MessagingProvider"]?.ToLowerInvariant() switch
+        {
+            "rabbitmq" => "RabbitMq",
+            "servicebus" => "ServiceBus",
+            "sqs" => "Sqs",
+            _ => null
+        };
 
     /// <summary>
     /// Detects available provider by checking for connection strings.

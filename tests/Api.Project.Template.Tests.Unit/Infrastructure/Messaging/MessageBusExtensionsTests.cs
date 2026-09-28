@@ -373,6 +373,31 @@ public class MessageBusExtensionsTests
         Assert.Contains("Valid values: 'RabbitMq', 'ServiceBus', 'Sqs', 'Auto'", ex.Message);
     }
 
+    [Theory]
+    [InlineData("Sqs", "Sqs")]
+    [InlineData("ServiceBus", "ServiceBus")]
+    [InlineData("None", "RabbitMq")]
+    [InlineData(null, "RabbitMq")]
+    public void ResolveProvider_Auto_PrefersMessagingProviderOverConnectionStringDetection(string? messagingProvider, string expected)
+    {
+        // Arrange
+        // A leftover RabbitMQ connection string must not override MessagingProvider;
+        // detection only applies when MessagingProvider is unset or "None".
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["MessagingProvider"] = messagingProvider,
+                ["ConnectionStrings:messaging"] = "amqp://localhost"
+            })
+            .Build();
+
+        // Act
+        var provider = MessageBusExtensions.ResolveProvider("Auto", config);
+
+        // Assert
+        Assert.Equal(expected, provider);
+    }
+
     [Fact]
     public async Task AddMessageConsumer_TwoConsumers_EachGetsItsOwnConsumerAndAdapter()
     {

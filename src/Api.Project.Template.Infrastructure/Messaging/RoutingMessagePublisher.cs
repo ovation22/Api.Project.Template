@@ -54,8 +54,15 @@ public class RoutingMessagePublisher : IMessagePublisher, IAsyncDisposable
             return;
         }
 
-        // Resolve routing from configuration (cached)
-        var resolvedOptions = GetOrCreateRoutingOptions<T>(options);
+        // Resolve routing from configuration (cached per message type), then apply this call's
+        // Subject and Metadata — those vary per call, so they must not be cached.
+        var route = GetOrCreateRoutingOptions<T>();
+        var resolvedOptions = new MessagePublishOptions
+        {
+            Destination = route.Destination,
+            Subject = options?.Subject ?? route.Subject,
+            Metadata = MergeMetadata(options?.Metadata, route.Metadata)
+        };
 
         _logger.LogDebug(
             "Publishing {MessageType} to {Destination} with routing key {RoutingKey}",
@@ -66,7 +73,10 @@ public class RoutingMessagePublisher : IMessagePublisher, IAsyncDisposable
         await _innerPublisher.PublishAsync(message, resolvedOptions, cancellationToken);
     }
 
-    private MessagePublishOptions GetOrCreateRoutingOptions<T>(MessagePublishOptions? userOptions)
+    /// <summary>
+    /// Resolves the configured route for <typeparamref name="T"/> (destination, subject and route metadata only).
+    /// </summary>
+    private MessagePublishOptions GetOrCreateRoutingOptions<T>()
     {
         return _routingCache.GetOrAdd(typeof(T), _ =>
         {
@@ -85,7 +95,7 @@ public class RoutingMessagePublisher : IMessagePublisher, IAsyncDisposable
                 {
                     Destination = route.Destination ?? _routingConfig.DefaultDestination,
                     Subject = route.RoutingKey ?? route.Subject ?? _routingConfig.DefaultRoutingKey ?? messageTypeName,
-                    Metadata = MergeMetadata(userOptions?.Metadata, route.Metadata)
+                    Metadata = route.Metadata?.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value)
                 };
             }
 
@@ -99,15 +109,14 @@ public class RoutingMessagePublisher : IMessagePublisher, IAsyncDisposable
             return new MessagePublishOptions
             {
                 Destination = _routingConfig.DefaultDestination,
-                Subject = _routingConfig.DefaultRoutingKey ?? messageTypeName,
-                Metadata = userOptions?.Metadata
+                Subject = _routingConfig.DefaultRoutingKey ?? messageTypeName
             };
         });
     }
 
     private static IDictionary<string, object>? MergeMetadata(
         IDictionary<string, object>? userMetadata,
-        Dictionary<string, string>? routeMetadata)
+        IDictionary<string, object>? routeMetadata)
     {
         if (userMetadata == null && routeMetadata == null)
             return null;

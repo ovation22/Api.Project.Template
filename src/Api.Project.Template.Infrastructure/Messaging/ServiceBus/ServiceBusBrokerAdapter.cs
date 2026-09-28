@@ -25,6 +25,9 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
     private int _maxRetries;
     private bool _disposed;
 
+    /// <inheritdoc />
+    public string ConnectionStringName => "servicebus";
+
     /// <summary>
     /// The entity the processor reads from (a queue, or "{topic}/Subscriptions/{subscription}"). For tests.
     /// </summary>

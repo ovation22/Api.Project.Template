@@ -8,16 +8,24 @@ using Api.Project.Template.Application.Messaging.Abstractions;
 using Microsoft.Extensions.Configuration;
 using System.Collections.Concurrent;
 using System.Text.Json;
+using SnsAttribute = Amazon.SimpleNotificationService.Model.MessageAttributeValue;
+using SqsAttribute = Amazon.SQS.Model.MessageAttributeValue;
 
 namespace Api.Project.Template.Infrastructure.Messaging.Sqs;
 
 /// <summary>
 /// AWS SQS/SNS implementation of IMessagePublisher.
-/// Routes to SNS when destination is a topic ARN (arn:aws:sns:…), otherwise publishes directly to an SQS queue URL.
-/// Supports LocalStack for local development (set ConnectionStrings:sqs to the LocalStack endpoint URL).
+/// Routes to SNS when destination is a topic ARN (arn:aws:sns:…), otherwise publishes directly to an SQS queue.
+/// Every message carries MessageType, Subject, Timestamp and CorrelationId attributes, plus the publish
+/// options' Metadata (as far as the 10-attribute limit allows).
+/// Supports LocalStack for local development (set ConnectionStrings:sqs to the LocalStack endpoint URL);
+/// without a connection string it uses the regional AWS endpoint and the default credential chain.
 /// </summary>
 public class SqsMessagePublisher : IMessagePublisher, IAsyncDisposable
 {
+    // SQS and SNS both allow at most 10 message attributes.
+    private const int MaxMessageAttributes = 10;
+
     private readonly AmazonSQSClient _sqsClient;
     private readonly AmazonSimpleNotificationServiceClient _snsClient;
     private readonly ILoggerAdapter<SqsMessagePublisher> _logger;
@@ -49,6 +57,8 @@ public class SqsMessagePublisher : IMessagePublisher, IAsyncDisposable
             snsConfig.ServiceURL = serviceUrl;
         }
 
+        // Explicit keys are for LocalStack (see appsettings.Development.json / the AppHost). Without them
+        // the SDK's default credential chain applies (IAM role, environment variables, profile).
         var accessKey = configuration["AWS:AccessKey"];
         var secretKey = configuration["AWS:SecretKey"];
 
@@ -79,29 +89,32 @@ public class SqsMessagePublisher : IMessagePublisher, IAsyncDisposable
         if (message is null)
             throw new ArgumentNullException(nameof(message));
 
-        // SQS is direct-queue — publisher and consumer must use the same queue.
-        // Unlike RabbitMQ (exchange+binding) there is no routing indirection, so
-        // MessageBus:Sqs:DefaultDestination takes precedence over the shared routing
-        // Destination (which maps to an exchange name for RabbitMQ).
+        // MessageBus:Sqs:DefaultDestination, when set, is where every SQS message goes — it takes precedence
+        // over the routing Destination. The routing section is shared by all providers and its Destination is
+        // typically a RabbitMQ exchange / Service Bus topic, which means nothing to SQS. Leave it empty to
+        // use the routing Destination (a queue name, queue URL, or SNS topic ARN) instead.
         var destination = (!string.IsNullOrEmpty(_defaultDestination) ? _defaultDestination : null)
             ?? options?.Destination
             ?? throw new InvalidOperationException(
                 "No destination specified and MessageBus:Sqs:DefaultDestination is not configured.");
 
-        var subject = options?.Subject ?? typeof(T).Name;
         var payload = JsonSerializer.Serialize(message, _jsonOptions);
-        var messageTypeName = typeof(T).FullName ?? typeof(T).Name;
+        var attributes = BuildAttributes<T>(options);
 
         try
         {
             if (destination.StartsWith("arn:aws:sns:", StringComparison.OrdinalIgnoreCase))
-                await PublishToSnsAsync(destination, subject, payload, messageTypeName, cancellationToken);
+                await PublishToSnsAsync(destination, attributes["Subject"], payload, attributes, cancellationToken);
             else
-                await PublishToSqsAsync(destination, subject, payload, messageTypeName, cancellationToken);
+                await PublishToSqsAsync(destination, payload, attributes, cancellationToken);
 
             _logger.LogInformation(
                 "Published {MessageType} to {Destination}",
                 typeof(T).Name, destination);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -112,8 +125,41 @@ public class SqsMessagePublisher : IMessagePublisher, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Builds the string attributes sent with every message: the standard ones first, then Metadata
+    /// until the 10-attribute limit (extra Metadata entries are dropped with a warning).
+    /// </summary>
+    private Dictionary<string, string> BuildAttributes<T>(MessagePublishOptions? options)
+    {
+        var attributes = new Dictionary<string, string>
+        {
+            ["MessageType"] = typeof(T).FullName ?? typeof(T).Name,
+            ["Subject"] = options?.Subject ?? typeof(T).Name,
+            ["Timestamp"] = DateTimeOffset.UtcNow.ToString("O"),
+            ["CorrelationId"] = CorrelationId.Current()
+        };
+
+        foreach (var (key, value) in options?.Metadata ?? new Dictionary<string, object>())
+        {
+            // Attribute values can't be empty; standard attributes win over Metadata with the same name
+            var text = value?.ToString();
+            if (string.IsNullOrEmpty(text) || attributes.ContainsKey(key))
+                continue;
+
+            if (attributes.Count == MaxMessageAttributes)
+            {
+                _logger.LogWarning("Dropping metadata {Key}: SQS/SNS allow at most {Max} message attributes", key, MaxMessageAttributes);
+                continue;
+            }
+
+            attributes[key] = text;
+        }
+
+        return attributes;
+    }
+
     private async Task PublishToSnsAsync(
-        string topicArn, string subject, string payload, string messageType,
+        string topicArn, string subject, string payload, Dictionary<string, string> attributes,
         CancellationToken cancellationToken)
     {
         var request = new PublishRequest
@@ -121,18 +167,16 @@ public class SqsMessagePublisher : IMessagePublisher, IAsyncDisposable
             TopicArn = topicArn,
             Message = payload,
             Subject = subject,
-            MessageAttributes = new Dictionary<string, Amazon.SimpleNotificationService.Model.MessageAttributeValue>
-            {
-                ["MessageType"] = new Amazon.SimpleNotificationService.Model.MessageAttributeValue { DataType = "String", StringValue = messageType },
-                ["Timestamp"] = new Amazon.SimpleNotificationService.Model.MessageAttributeValue { DataType = "String", StringValue = DateTimeOffset.UtcNow.ToString("O") }
-            }
+            MessageAttributes = attributes.ToDictionary(
+                kvp => kvp.Key,
+                kvp => new SnsAttribute { DataType = "String", StringValue = kvp.Value })
         };
 
         await _snsClient.PublishAsync(request, cancellationToken);
     }
 
     private async Task PublishToSqsAsync(
-        string destination, string subject, string payload, string messageType,
+        string destination, string payload, Dictionary<string, string> attributes,
         CancellationToken cancellationToken)
     {
         var queueUrl = await ResolveQueueUrlAsync(destination, cancellationToken);
@@ -141,12 +185,9 @@ public class SqsMessagePublisher : IMessagePublisher, IAsyncDisposable
         {
             QueueUrl = queueUrl,
             MessageBody = payload,
-            MessageAttributes = new Dictionary<string, Amazon.SQS.Model.MessageAttributeValue>
-            {
-                ["MessageType"] = new Amazon.SQS.Model.MessageAttributeValue { DataType = "String", StringValue = messageType },
-                ["Subject"] = new Amazon.SQS.Model.MessageAttributeValue { DataType = "String", StringValue = subject },
-                ["Timestamp"] = new Amazon.SQS.Model.MessageAttributeValue { DataType = "String", StringValue = DateTimeOffset.UtcNow.ToString("O") }
-            }
+            MessageAttributes = attributes.ToDictionary(
+                kvp => kvp.Key,
+                kvp => new SqsAttribute { DataType = "String", StringValue = kvp.Value })
         };
 
         await _sqsClient.SendMessageAsync(request, cancellationToken);

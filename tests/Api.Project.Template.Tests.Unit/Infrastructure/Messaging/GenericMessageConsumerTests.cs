@@ -352,7 +352,79 @@ public class GenericMessageConsumerTests
         Assert.Equal(7, captured.Concurrency);                           // falls back to MessageBus:Consumer
     }
 
+    [Fact]
+    public async Task StartAsync_UsesTheAdaptersOwnConnectionString()
+    {
+        // Arrange
+        // With a leftover RabbitMQ connection string present, an SQS adapter must still get the sqs one.
+        var configuration = ConsumerConfiguration(new()
+        {
+            ["ConnectionStrings:messaging"] = "amqp://localhost",
+            ["ConnectionStrings:sqs"] = "http://localhost:4566"
+        });
+        _mockAdapter.Setup(a => a.ConnectionStringName).Returns("sqs");
+        var captured = CaptureConfig();
+
+        // Act
+        await CreateConsumer(configuration).StartAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("http://localhost:4566", captured()!.ConnectionString);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenConnectionStringIsOptionalAndMissing_StartsWithoutOne()
+    {
+        // Arrange
+        // SQS against real AWS: no endpoint override, regional endpoint + default credential chain
+        var configuration = ConsumerConfiguration([]);
+        _mockAdapter.Setup(a => a.ConnectionStringName).Returns("sqs");
+        _mockAdapter.Setup(a => a.RequiresConnectionString).Returns(false);
+        var captured = CaptureConfig();
+
+        // Act
+        await CreateConsumer(configuration).StartAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(string.Empty, captured()!.ConnectionString);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenRequiredConnectionStringIsMissing_ThrowsNamingTheSetting()
+    {
+        // Arrange
+        var configuration = ConsumerConfiguration(new() { ["ConnectionStrings:sqs"] = "http://localhost:4566" });
+        _mockAdapter.Setup(a => a.ConnectionStringName).Returns("messaging");
+        _mockAdapter.Setup(a => a.RequiresConnectionString).Returns(true);
+
+        // Act
+        var act = () => CreateConsumer(configuration).StartAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(act);
+        Assert.Contains("ConnectionStrings:messaging", ex.Message);
+    }
+
     // Helper methods
+
+    private static IConfiguration ConsumerConfiguration(Dictionary<string, string?> values)
+    {
+        values["MessageBus:Consumer:Queue"] = "test-queue";
+        return new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+    }
+
+    private GenericMessageConsumer<TestMessage, IMessageProcessor<TestMessage>> CreateConsumer(IConfiguration configuration)
+        => new(_mockAdapter.Object, configuration,
+            _services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(), _logger.Object);
+
+    private Func<MessageBrokerConfig?> CaptureConfig()
+    {
+        MessageBrokerConfig? captured = null;
+        _mockAdapter.Setup(a => a.ConnectAsync(It.IsAny<MessageBrokerConfig>(), It.IsAny<CancellationToken>()))
+            .Callback<MessageBrokerConfig, CancellationToken>((config, _) => captured = config)
+            .Returns(Task.CompletedTask);
+        return () => captured;
+    }
 
     private async Task<Func<TestMessage, MessageContext, Task<MessageProcessingResult>>> StartWithProcessorThatThrowsAsync(Exception exception)
     {

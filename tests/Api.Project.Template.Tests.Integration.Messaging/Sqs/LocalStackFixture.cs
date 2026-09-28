@@ -1,5 +1,7 @@
 using Amazon.Runtime;
+using Amazon.SimpleNotificationService;
 using Amazon.SQS;
+using Microsoft.Extensions.Configuration;
 using Testcontainers.LocalStack;
 
 namespace Api.Project.Template.Tests.Integration.Messaging.Sqs;
@@ -20,7 +22,7 @@ public sealed class LocalStackFixture : IAsyncLifetime
     // Same image the AppHost runs
     public async ValueTask InitializeAsync()
         => _container = await TestSupport.StartContainerAsync(() => new LocalStackBuilder("localstack/localstack:4.4.0")
-            .WithEnvironment("SERVICES", "sqs")
+            .WithEnvironment("SERVICES", "sqs,sns")
             .Build());
 
     public async ValueTask DisposeAsync()
@@ -33,4 +35,21 @@ public sealed class LocalStackFixture : IAsyncLifetime
     public AmazonSQSClient CreateClient() => new(
         new BasicAWSCredentials(AccessKey, SecretKey),
         new AmazonSQSConfig { ServiceURL = ServiceUrl, AuthenticationRegion = Region });
+
+    public AmazonSimpleNotificationServiceClient CreateSnsClient() => new(
+        new BasicAWSCredentials(AccessKey, SecretKey),
+        new AmazonSimpleNotificationServiceConfig { ServiceURL = ServiceUrl, AuthenticationRegion = Region });
+
+    /// <summary>
+    /// The configuration the API and Worker would see when running against this LocalStack.
+    /// </summary>
+    public IConfiguration CreateAppConfiguration() => new ConfigurationBuilder()
+        .AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:sqs"] = ServiceUrl,
+            ["MessageBus:Sqs:Region"] = Region,
+            ["AWS:AccessKey"] = AccessKey,
+            ["AWS:SecretKey"] = SecretKey
+        })
+        .Build();
 }

@@ -52,16 +52,27 @@ else if (messagingProvider == "ServiceBus")
     api.WithReference(serviceBus).WaitFor(serviceBus);
     worker.WithReference(serviceBus).WaitFor(serviceBus);
 }
-else if (messagingProvider == "Sqs")
+else if (messagingProvider == "Sqs" && builder.ExecutionContext.IsRunMode)
 {
+    // LocalStack stands in for AWS only when running locally. A published app uses real SQS/SNS:
+    // no connection string → regional endpoint, and the default AWS credential chain (e.g. an IAM role).
     var localstack = builder.AddContainer("sqs", "localstack/localstack", "4.4.0")
         .WithEnvironment("SERVICES", "sqs,sns")
         .WithHttpEndpoint(targetPort: 4566, name: "sqs")
+        .WithHttpHealthCheck("/_localstack/health", endpointName: "sqs")
         .WithLifetime(ContainerLifetime.Persistent);
 
     var sqsEndpoint = localstack.GetEndpoint("sqs");
-    api.WithEnvironment("ConnectionStrings__sqs", sqsEndpoint).WaitFor(localstack);
-    worker.WithEnvironment("ConnectionStrings__sqs", sqsEndpoint).WaitFor(localstack);
+
+    // LocalStack accepts any credentials; set them explicitly so it works whatever the environment.
+    foreach (var project in new[] { api, worker })
+    {
+        project
+            .WithEnvironment("ConnectionStrings__sqs", sqsEndpoint)
+            .WithEnvironment("AWS__AccessKey", "test")
+            .WithEnvironment("AWS__SecretKey", "test")
+            .WaitFor(localstack);
+    }
 }
 
 builder.Build().Run();

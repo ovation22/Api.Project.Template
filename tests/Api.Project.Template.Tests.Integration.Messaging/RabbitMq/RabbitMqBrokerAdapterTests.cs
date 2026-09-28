@@ -7,7 +7,8 @@ using static Api.Project.Template.Tests.Integration.Messaging.TestSupport;
 namespace Api.Project.Template.Tests.Integration.Messaging.RabbitMq;
 
 [Trait("Category", "RabbitMq")]
-public sealed class RabbitMqBrokerAdapterTests(RabbitMqFixture fixture) : IClassFixture<RabbitMqFixture>
+[Collection(RabbitMqCollection.Name)]
+public sealed class RabbitMqBrokerAdapterTests(RabbitMqFixture fixture)
 {
     private const int MaxRetries = 3;
 
