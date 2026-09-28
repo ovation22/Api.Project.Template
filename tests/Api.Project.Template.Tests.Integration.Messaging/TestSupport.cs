@@ -34,6 +34,34 @@ public sealed class RecordingHandler
     }
 }
 
+/// <summary>
+/// A handler that signals when it starts, then either runs for a fixed time (ignoring cancellation,
+/// like a processor finishing its work) or waits until the consumer's token is cancelled.
+/// </summary>
+public sealed class SlowHandler(TimeSpan? duration = null)
+{
+    private int _calls;
+    private int _completed;
+
+    public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public int Calls => Volatile.Read(ref _calls);
+    public int Completed => Volatile.Read(ref _completed);
+
+    public async Task<MessageProcessingResult> HandleAsync(TestMessage message, MessageContext context)
+    {
+        Interlocked.Increment(ref _calls);
+        Started.TrySetResult();
+
+        if (duration is { } d)
+            await Task.Delay(d);
+        else
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+
+        Interlocked.Increment(ref _completed);
+        return MessageProcessingResult.Succeeded();
+    }
+}
+
 public static class TestSupport
 {
     public const string MalformedPayload = "this is not json";

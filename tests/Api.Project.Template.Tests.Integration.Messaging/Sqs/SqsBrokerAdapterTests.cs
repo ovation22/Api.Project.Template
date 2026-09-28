@@ -78,6 +78,83 @@ public sealed class SqsBrokerAdapterTests(LocalStackFixture fixture) : IClassFix
     }
 
     [Fact]
+    public async Task StoppingMidMessage_ReturnsMessageToQueueInsteadOfDeadLettering()
+    {
+        // Arrange
+        var queue = UniqueName("stop");
+        var handler = new SlowHandler();
+        using var stopping = new CancellationTokenSource();
+        var adapter = await ConnectAdapterAsync(queue);
+        await adapter.SubscribeAsync<TestMessage>(handler.HandleAsync, stopping.Token);
+        await SendAsync(queue, Payload(1));
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        // Act
+        await stopping.CancelAsync();
+        await adapter.DisposeAsync();
+        // Usually visible again right away. If a long-poll receive that was being cancelled picked it up
+        // first, it's in flight until its visibility timeout instead — either way it's still in the queue.
+        var counts = await EventuallyAsync(() => CountAsync(queue), c => c.Visible == 1, TimeSpan.FromSeconds(10));
+
+        // Assert
+        Assert.Equal(1, counts.Visible + counts.InFlight);
+        Assert.Empty(await ReceiveDeadLetterReasonsAsync(queue, expected: 0, timeout: TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact]
+    public async Task StoppingWhileHandlerIsRunning_WaitsForItAndDeletesTheMessage()
+    {
+        // Arrange
+        // The handler takes 3s and ignores cancellation — it finishes its work during shutdown.
+        var queue = UniqueName("drain");
+        var handler = new SlowHandler(TimeSpan.FromSeconds(3));
+        using var stopping = new CancellationTokenSource();
+        var adapter = await ConnectAdapterAsync(queue);
+        await adapter.SubscribeAsync<TestMessage>(handler.HandleAsync, stopping.Token);
+        await SendAsync(queue, Payload(1));
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        // Act
+        await stopping.CancelAsync();
+        await adapter.DisposeAsync();
+
+        // Assert
+        // Dispose waited for the handler, and the processed message was deleted (not left in flight).
+        Assert.Equal(1, handler.Completed);
+        Assert.Equal((0, 0), await CountAsync(queue));
+    }
+
+    [Fact]
+    public async Task SlowHandler_ExtendsVisibility_SoTheMessageIsProcessedOnce()
+    {
+        // Arrange
+        // A 2s visibility timeout and a 5s handler: without extension the message reappears mid-processing
+        // and a free handler slot picks it up again.
+        var queue = UniqueName("slow");
+        using (var sqs = fixture.CreateClient())
+        {
+            await sqs.CreateQueueAsync(new CreateQueueRequest
+            {
+                QueueName = queue,
+                Attributes = new Dictionary<string, string> { ["VisibilityTimeout"] = "2" }
+            }, TestContext.Current.CancellationToken);
+        }
+
+        var handler = new SlowHandler(TimeSpan.FromSeconds(5));
+        await using var adapter = await ConnectAdapterAsync(queue);
+        await adapter.SubscribeAsync<TestMessage>(handler.HandleAsync, TestContext.Current.CancellationToken);
+
+        // Act
+        await SendAsync(queue, Payload(1));
+        await EventuallyAsync(() => Task.FromResult(handler.Completed), c => c == 1);
+        var remaining = await EventuallyAsync(() => CountAsync(queue), c => c == (0, 0), TimeSpan.FromSeconds(5));
+
+        // Assert
+        Assert.Equal(1, handler.Calls);
+        Assert.Equal((0, 0), remaining);
+    }
+
+    [Fact]
     public async Task DisposeAsync_CalledTwiceAfterSubscribing_DoesNotThrow()
     {
         // Arrange
@@ -95,6 +172,27 @@ public sealed class SqsBrokerAdapterTests(LocalStackFixture fixture) : IClassFix
 
     private async Task<SqsBrokerAdapter> StartAdapterAsync(string queue, RecordingHandler handler)
     {
+        var adapter = await ConnectAdapterAsync(queue);
+        await adapter.SubscribeAsync<TestMessage>(handler.HandleAsync, TestContext.Current.CancellationToken);
+        return adapter;
+    }
+
+    // Visible and in-flight (received but not yet deleted) message counts.
+    private async Task<(int Visible, int InFlight)> CountAsync(string queue)
+    {
+        using var sqs = fixture.CreateClient();
+        var queueUrl = (await sqs.GetQueueUrlAsync(queue, TestContext.Current.CancellationToken)).QueueUrl;
+        var attributes = (await sqs.GetQueueAttributesAsync(new GetQueueAttributesRequest
+        {
+            QueueUrl = queueUrl,
+            AttributeNames = ["ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible"]
+        }, TestContext.Current.CancellationToken)).Attributes;
+
+        return (int.Parse(attributes["ApproximateNumberOfMessages"]), int.Parse(attributes["ApproximateNumberOfMessagesNotVisible"]));
+    }
+
+    private async Task<SqsBrokerAdapter> ConnectAdapterAsync(string queue)
+    {
         var adapter = new SqsBrokerAdapter(Logger<SqsBrokerAdapter>());
         await adapter.ConnectAsync(new MessageBrokerConfig
         {
@@ -109,7 +207,6 @@ public sealed class SqsBrokerAdapterTests(LocalStackFixture fixture) : IClassFix
                 ["SecretKey"] = LocalStackFixture.SecretKey
             }
         }, TestContext.Current.CancellationToken);
-        await adapter.SubscribeAsync<TestMessage>(handler.HandleAsync, TestContext.Current.CancellationToken);
         return adapter;
     }
 

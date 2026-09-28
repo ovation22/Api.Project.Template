@@ -5,8 +5,11 @@ using Api.Project.Template.Infrastructure.Messaging;
 using Api.Project.Template.Infrastructure.Messaging.Abstractions;
 using Api.Project.Template.Infrastructure.Messaging.RabbitMq;
 using Api.Project.Template.Infrastructure.Messaging.ServiceBus;
+using Api.Project.Template.Application.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Moq;
 
 namespace Api.Project.Template.Tests.Unit.Infrastructure.Messaging;
 
@@ -370,10 +373,69 @@ public class MessageBusExtensionsTests
         Assert.Contains("Valid values: 'RabbitMq', 'ServiceBus', 'Sqs', 'Auto'", ex.Message);
     }
 
+    [Fact]
+    public async Task AddMessageConsumer_TwoConsumers_EachGetsItsOwnConsumerAndAdapter()
+    {
+        // Arrange
+        var adaptersCreated = 0;
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(typeof(ILoggerAdapter<>), typeof(LoggerAdapter<>));
+        services.AddSingleton<IConfiguration>(CreateEmptyConfiguration());
+        services.AddTransient<IMessageBrokerAdapter>(_ =>
+        {
+            adaptersCreated++;
+            return new Mock<IMessageBrokerAdapter>().Object;
+        });
+
+        // Act
+        services.AddMessageConsumer<OrderPlaced, OrderPlacedProcessor, OrderWorker>("MessageBus:Consumers:Orders");
+        services.AddMessageConsumer<InvoiceSent, InvoiceSentProcessor, InvoiceWorker>("MessageBus:Consumers:Invoices");
+        // Adapters are IAsyncDisposable-only, so the provider must be disposed asynchronously
+        await using var serviceProvider = services.BuildServiceProvider();
+        var workers = serviceProvider.GetServices<IHostedService>().ToList();
+
+        // Assert
+        // Previously both workers got the last-registered consumer, sharing one adapter.
+        Assert.Collection(workers,
+            w => Assert.IsType<OrderWorker>(w),
+            w => Assert.IsType<InvoiceWorker>(w));
+        Assert.IsType<GenericMessageConsumer<OrderPlaced, OrderPlacedProcessor>>(
+            serviceProvider.GetRequiredKeyedService<IMessageConsumer>(typeof(OrderWorker)));
+        Assert.IsType<GenericMessageConsumer<InvoiceSent, InvoiceSentProcessor>>(
+            serviceProvider.GetRequiredKeyedService<IMessageConsumer>(typeof(InvoiceWorker)));
+        Assert.Equal(2, adaptersCreated);
+    }
+
     private static IConfiguration CreateEmptyConfiguration()
     {
         return new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>())
             .Build();
     }
+
+    public record OrderPlaced;
+    public record InvoiceSent;
+
+    public class OrderPlacedProcessor : IMessageProcessor<OrderPlaced>
+    {
+        public Task<MessageProcessingResult> ProcessAsync(OrderPlaced message, MessageContext context)
+            => Task.FromResult(MessageProcessingResult.Succeeded());
+    }
+
+    public class InvoiceSentProcessor : IMessageProcessor<InvoiceSent>
+    {
+        public Task<MessageProcessingResult> ProcessAsync(InvoiceSent message, MessageContext context)
+            => Task.FromResult(MessageProcessingResult.Succeeded());
+    }
+
+    public class OrderWorker(
+        IMessageConsumer consumer,
+        ILoggerAdapter<MessageConsumerWorker<OrderPlaced, OrderPlacedProcessor>> logger)
+        : MessageConsumerWorker<OrderPlaced, OrderPlacedProcessor>(consumer, logger);
+
+    public class InvoiceWorker(
+        IMessageConsumer consumer,
+        ILoggerAdapter<MessageConsumerWorker<InvoiceSent, InvoiceSentProcessor>> logger)
+        : MessageConsumerWorker<InvoiceSent, InvoiceSentProcessor>(consumer, logger);
 }

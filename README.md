@@ -226,6 +226,28 @@ Consumer queue and broker-specific settings live in the Worker's `appsettings.js
 
 > **Upgrading an existing RabbitMQ queue:** RabbitMQ can't add dead-letter settings to a queue that already exists. If the Worker fails with *"already exists without dead-letter settings"*, delete the queue once (management UI → Queues) and restart.
 
+**Shutdown.** When the Worker stops, the consumer stops receiving and in-flight processors are signalled through `MessageContext.CancellationToken`. A processor that stops early (throws `OperationCanceledException` on that token) has its message returned to the queue — not counted as a failure and not dead-lettered. A processor that ignores the token is allowed to finish, and its message is settled normally (SQS waits up to 30 seconds for in-flight messages). Pass the token to your I/O so shutdown is quick.
+
+**Slow processors (SQS).** While a processor runs, the adapter keeps extending the message's visibility timeout, so a message that takes longer than the queue's timeout isn't redelivered to another consumer mid-processing. Messages are only received when a processing slot is free.
+
+**Multiple consumers.** Each `AddMessageConsumer` call gets its own consumer and broker connection. Give each one its own settings section; values it doesn't set fall back to `MessageBus:Consumer`:
+
+```csharp
+builder.Services.AddMessageConsumer<WeatherRequested, WeatherRequestProcessor, Worker>();
+builder.Services.AddMessageConsumer<AuditEvent, AuditProcessor, AuditWorker>("MessageBus:Consumers:Audit");
+```
+
+```json
+"MessageBus": {
+  "Consumer": { "Queue": "weather-requests", "Concurrency": 5, "MaxRetries": 3 },
+  "Consumers": {
+    "Audit": { "Queue": "audit-events", "RoutingKey": "Audit.*", "Concurrency": 1 }
+  }
+}
+```
+
+A consumer section can set `Queue`, `Concurrency`, `MaxRetries`, `PrefetchCount`, `RoutingKey` (RabbitMQ) and `SubscriptionName` (Service Bus). The broker connection, exchange, topic and region are shared.
+
 ---
 
 ## Solution Structure

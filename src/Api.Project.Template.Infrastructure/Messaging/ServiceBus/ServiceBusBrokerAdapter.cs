@@ -23,6 +23,7 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
     private ServiceBusProcessor? _processor;
     private string? _queueName;
     private int _maxRetries;
+    private bool _disposed;
 
     /// <summary>
     /// The entity the processor reads from (a queue, or "{topic}/Subscriptions/{subscription}"). For tests.
@@ -98,14 +99,14 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
                         _queueName, body);
 
                     // Dead-letter invalid messages
-                    await args.DeadLetterMessageAsync(args.Message, "DeserializationFailed", ex.Message, cancellationToken);
+                    await args.DeadLetterMessageAsync(args.Message, "DeserializationFailed", ex.Message, CancellationToken.None);
                     return;
                 }
 
                 if (message == null)
                 {
                     logger.LogWarning("Deserialized message is null on queue {Queue}", _queueName);
-                    await args.DeadLetterMessageAsync(args.Message, "NullMessage", "Message deserialized to null", cancellationToken);
+                    await args.DeadLetterMessageAsync(args.Message, "NullMessage", "Message deserialized to null", CancellationToken.None);
                     return;
                 }
 
@@ -125,6 +126,15 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
                 {
                     result = await handler(message, context);
                 }
+                catch (OperationCanceledException) when (args.CancellationToken.IsCancellationRequested)
+                {
+                    // The processor is stopping: abandon so the message is redelivered, rather than dead-lettering it
+                    await args.AbandonMessageAsync(args.Message, cancellationToken: CancellationToken.None);
+                    logger.LogInformation(
+                        "Message {MessageId} abandoned on {Queue} (consumer stopping)",
+                        args.Message.MessageId, _queueName);
+                    return;
+                }
                 catch (Exception ex)
                 {
                     logger.LogError(ex,
@@ -136,7 +146,7 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
                 // Handle result
                 if (result.Success)
                 {
-                    await args.CompleteMessageAsync(args.Message, cancellationToken);
+                    await args.CompleteMessageAsync(args.Message, CancellationToken.None);
                 }
                 else
                 {
@@ -150,12 +160,12 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
                         await args.DeadLetterMessageAsync(
                             args.Message,
                             "MaxRetriesExceeded",
-                            result.ErrorReason ?? "Processing failed after maximum retries", cancellationToken);
+                            result.ErrorReason ?? "Processing failed after maximum retries", CancellationToken.None);
                     }
                     else if (result.Requeue)
                     {
                         // Abandon to requeue
-                        await args.AbandonMessageAsync(args.Message, cancellationToken: cancellationToken);
+                        await args.AbandonMessageAsync(args.Message, cancellationToken: CancellationToken.None);
 
                         logger.LogWarning(
                             "Message processing failed, requeuing (Queue: {Queue}, MessageId: {MessageId}, Reason: {Reason})",
@@ -167,7 +177,7 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
                         await args.DeadLetterMessageAsync(
                             args.Message,
                             "ProcessingFailed",
-                            result.ErrorReason ?? "Processing failed", cancellationToken);
+                            result.ErrorReason ?? "Processing failed", CancellationToken.None);
 
                         logger.LogWarning(
                             "Message processing failed, dead-lettered (Queue: {Queue}, MessageId: {MessageId}, Reason: {Reason})",
@@ -184,7 +194,7 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
                 // Dead-letter on unexpected errors
                 try
                 {
-                    await args.DeadLetterMessageAsync(args.Message, "UnexpectedError", ex.Message, cancellationToken);
+                    await args.DeadLetterMessageAsync(args.Message, "UnexpectedError", ex.Message, CancellationToken.None);
                 }
                 catch (Exception deadLetterEx)
                 {
@@ -228,6 +238,11 @@ public class ServiceBusBrokerAdapter(ILoggerAdapter<ServiceBusBrokerAdapter> log
 
     public async ValueTask DisposeAsync()
     {
+        // Both the consumer and the DI container dispose the adapter; only the first call does work.
+        if (_disposed)
+            return;
+        _disposed = true;
+
         await DisconnectAsync();
 
         if (_processor != null)
