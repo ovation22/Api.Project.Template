@@ -273,7 +273,7 @@ src/
 └── Api.Project.Template.ServiceDefaults # Shared Aspire configuration
 
 tests/
-├── Api.Project.Template.Tests.Unit         # Unit tests — xUnit v3, Moq, FluentAssertions
+├── Api.Project.Template.Tests.Unit         # Unit tests — xUnit v3, Moq, AwesomeAssertions
 ├── Api.Project.Template.Tests.Integration  # Integration tests — xUnit v3, SQLite, WebApplicationFactory
 ├── Api.Project.Template.Tests.Integration.Messaging # Broker adapter tests — xUnit v3, Testcontainers (Docker)
 ├── Api.Project.Template.Tests.Architecture # Architectural rule enforcement — NetArchTest
@@ -677,7 +677,7 @@ The [Richardson Maturity Model](https://martinfowler.com/articles/richardsonMatu
 - [x] Health checks
 - [x] OpenTelemetry (distributed tracing & metrics)
 - [x] Service discovery
-- [x] Unit tests — xUnit v3, Moq, FluentAssertions
+- [x] Unit tests — xUnit v3, Moq, AwesomeAssertions
 - [x] Integration tests — xUnit v3, SQLite, CustomWebApplicationFactory
 - [x] Architecture tests — NetArchTest
 - [x] Benchmark tests — BenchmarkDotNet

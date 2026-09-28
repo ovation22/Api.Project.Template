@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
     <PackageReference Include="Moq" />
     <PackageReference Include="xunit.v3" />
@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\src\Api.Project.Template.Application\Api.Project.Template.Application.csproj" />
     <ProjectReference Include="..\..\src\Api.Project.Template.Domain\Api.Project.Template.Domain.csproj" />
     <ProjectReference Include="..\..\src\Api.Project.Template.Infrastructure\Api.Project.Template.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Api.Project.Template.Worker\Api.Project.Template.Worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>

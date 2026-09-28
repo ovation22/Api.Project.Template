@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-<PackageReference Include="FluentAssertions" />
+<PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
     <PackageReference Include="xunit.v3" />

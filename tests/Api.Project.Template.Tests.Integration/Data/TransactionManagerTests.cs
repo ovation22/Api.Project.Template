@@ -1,7 +1,7 @@
 using Api.Project.Template.Domain.Entities;
 using Api.Project.Template.Infrastructure.Data;
 using Api.Project.Template.Infrastructure.Logging;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;

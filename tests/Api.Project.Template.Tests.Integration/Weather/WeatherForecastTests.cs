@@ -1,8 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using Api.Project.Template.Application.Features.Weather.Queries;
+using Api.Project.Template.Application.Messaging;
+using Api.Project.Template.Application.Messaging.Abstractions;
 using Api.Project.Template.Infrastructure.Data;
-using FluentAssertions;
+using AwesomeAssertions;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Api.Project.Template.Tests.Integration.Weather;
@@ -269,6 +272,28 @@ public class WeatherForecastTests : IClassFixture<CustomWebApplicationFactory>
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    [Trait("Category", "Baseline")]
+    public async Task Get_WhenMessageBrokerIsDown_StillReturnsForecasts()
+    {
+        // Arrange
+        // Publishing the "requested" event is best-effort; a broker outage must not fail the read.
+        var client = _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IMessagePublisher, FailingMessagePublisher>())).CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/weatherforecast", TestContext.Current.CancellationToken);
+
+        // Assert
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    private sealed class FailingMessagePublisher : IMessagePublisher
+    {
+        public Task PublishAsync<T>(T message, MessagePublishOptions? options = null, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Broker unreachable");
     }
 
     [Fact]
