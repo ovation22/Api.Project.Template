@@ -74,9 +74,10 @@ public static class MessageBusExtensions
     /// use the <c>AddMessageConsumer&lt;TMessage, TProcessor, TWorker&gt;</c> overload instead.
     /// </remarks>
     public static IServiceCollection AddMessageConsumer<TMessage, TProcessor>(
-        this IServiceCollection services)
+        this IServiceCollection services,
+        string consumerSection = GenericMessageConsumer.DefaultConsumerSection)
         where TProcessor : class, IMessageProcessor<TMessage>
-        => services.AddMessageConsumer<TMessage, TProcessor, MessageConsumerWorker<TMessage, TProcessor>>();
+        => services.AddMessageConsumer<TMessage, TProcessor, MessageConsumerWorker<TMessage, TProcessor>>(consumerSection);
 
     /// <summary>
     /// Registers a message consumer and its background host for the given message, processor, and worker types.
@@ -91,18 +92,32 @@ public static class MessageBusExtensions
     /// Allows service-specific log names and lifecycle customization.
     /// </typeparam>
     /// <param name="services">The service collection.</param>
+    /// <param name="consumerSection">
+    /// Configuration section with this consumer's settings (Queue, Concurrency, MaxRetries, PrefetchCount,
+    /// RoutingKey, SubscriptionName). Give each consumer its own section when registering more than one;
+    /// unset values fall back to <c>MessageBus:Consumer</c>.
+    /// </param>
     /// <returns>The service collection for chaining.</returns>
     /// <remarks>
     /// Call <see cref="AddMessageBus"/> before calling this method.
+    /// Each consumer gets its own <see cref="IMessageBrokerAdapter"/> (and so its own broker connection),
+    /// registered under <typeparamref name="TWorker"/> as a key so consumers don't replace each other.
     /// </remarks>
     public static IServiceCollection AddMessageConsumer<TMessage, TProcessor, TWorker>(
-        this IServiceCollection services)
+        this IServiceCollection services,
+        string consumerSection = GenericMessageConsumer.DefaultConsumerSection)
         where TProcessor : class, IMessageProcessor<TMessage>
         where TWorker : MessageConsumerWorker<TMessage, TProcessor>
     {
         services.AddScoped<TProcessor>();
-        services.AddSingleton<IMessageConsumer, GenericMessageConsumer<TMessage, TProcessor>>();
-        services.AddHostedService<TWorker>();
+
+        // Keyed singleton: owned (and disposed) by the container, one per worker type.
+        services.AddKeyedSingleton<IMessageConsumer>(typeof(TWorker), (sp, _) =>
+            ActivatorUtilities.CreateInstance<GenericMessageConsumer<TMessage, TProcessor>>(sp, consumerSection));
+
+        services.AddHostedService(sp => ActivatorUtilities.CreateInstance<TWorker>(
+            sp, sp.GetRequiredKeyedService<IMessageConsumer>(typeof(TWorker))));
+
         return services;
     }
 
@@ -144,7 +159,7 @@ public static class MessageBusExtensions
         });
 
         // Register consumer adapter
-        services.AddSingleton<IMessageBrokerAdapter, RabbitMqBrokerAdapter>();
+        services.AddTransient<IMessageBrokerAdapter, RabbitMqBrokerAdapter>();
     }
 
     /// <summary>
@@ -168,7 +183,7 @@ public static class MessageBusExtensions
         });
 
         // Register consumer adapter
-        services.AddSingleton<IMessageBrokerAdapter, ServiceBusBrokerAdapter>();
+        services.AddTransient<IMessageBrokerAdapter, ServiceBusBrokerAdapter>();
     }
 
     /// <summary>
@@ -189,7 +204,7 @@ public static class MessageBusExtensions
             return new RoutingMessagePublisher(innerPublisher, routingOptions, logger);
         });
 
-        services.AddSingleton<IMessageBrokerAdapter, SqsBrokerAdapter>();
+        services.AddTransient<IMessageBrokerAdapter, SqsBrokerAdapter>();
     }
 
     /// <summary>

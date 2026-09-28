@@ -81,6 +81,31 @@ public sealed class RabbitMqBrokerAdapterTests(RabbitMqFixture fixture) : IClass
     }
 
     [Fact]
+    public async Task StoppingMidMessage_ReturnsMessageToQueueInsteadOfDeadLettering()
+    {
+        // Arrange
+        var queue = UniqueName("stop");
+        var handler = new SlowHandler();
+        using var stopping = new CancellationTokenSource();
+        var adapter = new RabbitMqBrokerAdapter(Logger<RabbitMqBrokerAdapter>());
+        await adapter.ConnectAsync(Config(queue), TestContext.Current.CancellationToken);
+        await adapter.SubscribeAsync<TestMessage>(handler.HandleAsync, stopping.Token);
+        await PublishAsync(queue, Payload(1));
+        await handler.Started.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
+        // Act
+        await stopping.CancelAsync();
+        // Let the handler react to cancellation before the channel closes. (Closing the channel returns
+        // unacked messages on its own, which would mask what the adapter does with a cancelled message.)
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        await adapter.DisposeAsync();
+        var queued = await EventuallyAsync(() => CountAsync(queue), count => count == 1);
+
+        // Assert
+        Assert.Equal((1u, 0u), (queued, await CountAsync($"{queue}.dlq")));
+    }
+
+    [Fact]
     public async Task ConnectAsync_WhenQueueExistsWithoutDeadLetterSettings_ThrowsClearError()
     {
         // Arrange

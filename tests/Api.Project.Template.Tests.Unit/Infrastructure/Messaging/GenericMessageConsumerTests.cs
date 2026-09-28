@@ -288,7 +288,92 @@ public class GenericMessageConsumerTests
         Assert.Equal("weather-sub", captured.ProviderSpecific["SubscriptionName"]);
     }
 
+    [Fact]
+    public async Task MessageHandler_WhenCanceledBecauseConsumerIsStopping_RethrowsSoTheAdapterCanRequeue()
+    {
+        // Arrange
+        var handler = await StartWithProcessorThatThrowsAsync(new OperationCanceledException());
+        using var stopping = new CancellationTokenSource();
+        await stopping.CancelAsync();
+        var context = new MessageContext { MessageId = "msg-1", CancellationToken = stopping.Token };
+
+        // Act
+        var act = () => handler(new TestMessage { Id = 1 }, context);
+
+        // Assert
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(act);
+    }
+
+    [Fact]
+    public async Task MessageHandler_WhenCanceledWhileNotStopping_ReturnsFailure()
+    {
+        // Arrange
+        // e.g. an HTTP call inside the processor timing out — a genuine failure, not shutdown
+        var handler = await StartWithProcessorThatThrowsAsync(new TaskCanceledException("timed out"));
+        var context = new MessageContext { MessageId = "msg-1", CancellationToken = CancellationToken.None };
+
+        // Act
+        var result = await handler(new TestMessage { Id = 1 }, context);
+
+        // Assert
+        Assert.False(result.Success);
+    }
+
+    [Fact]
+    public async Task StartAsync_WithConsumerSection_UsesSectionValuesAndFallsBackToSharedSection()
+    {
+        // Arrange
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:messaging"] = "amqp://localhost",
+                ["MessageBus:Consumer:Queue"] = "weather-requests",
+                ["MessageBus:Consumer:Concurrency"] = "7",
+                ["MessageBus:RabbitMq:RoutingKey"] = "WeatherRequested",
+                ["MessageBus:Consumers:Audit:Queue"] = "audit-events",
+                ["MessageBus:Consumers:Audit:RoutingKey"] = "Audit.*"
+            })
+            .Build();
+        var scopeFactory = _services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+        MessageBrokerConfig? captured = null;
+        _mockAdapter.Setup(a => a.ConnectAsync(It.IsAny<MessageBrokerConfig>(), It.IsAny<CancellationToken>()))
+            .Callback<MessageBrokerConfig, CancellationToken>((config, _) => captured = config)
+            .Returns(Task.CompletedTask);
+        var consumer = new GenericMessageConsumer<TestMessage, IMessageProcessor<TestMessage>>(
+            _mockAdapter.Object, configuration, scopeFactory, _logger.Object, "MessageBus:Consumers:Audit");
+
+        // Act
+        await consumer.StartAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.NotNull(captured);
+        Assert.Equal("audit-events", captured.Queue);                    // from the consumer's section
+        Assert.Equal("Audit.*", captured.ProviderSpecific["RoutingKey"]); // per-consumer override
+        Assert.Equal(7, captured.Concurrency);                           // falls back to MessageBus:Consumer
+    }
+
     // Helper methods
+
+    private async Task<Func<TestMessage, MessageContext, Task<MessageProcessingResult>>> StartWithProcessorThatThrowsAsync(Exception exception)
+    {
+        var mockProcessor = new Mock<IMessageProcessor<TestMessage>>();
+        mockProcessor.Setup(p => p.ProcessAsync(It.IsAny<TestMessage>(), It.IsAny<MessageContext>()))
+            .ThrowsAsync(exception);
+        _services.AddScoped<IMessageProcessor<TestMessage>>(_ => mockProcessor.Object);
+        var scopeFactory = _services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
+
+        Func<TestMessage, MessageContext, Task<MessageProcessingResult>>? captured = null;
+        _mockAdapter.Setup(a => a.SubscribeAsync(
+                It.IsAny<Func<TestMessage, MessageContext, Task<MessageProcessingResult>>>(), It.IsAny<CancellationToken>()))
+            .Callback<Func<TestMessage, MessageContext, Task<MessageProcessingResult>>, CancellationToken>((h, _) => captured = h)
+            .Returns(Task.CompletedTask);
+
+        var consumer = new GenericMessageConsumer<TestMessage, IMessageProcessor<TestMessage>>(
+            _mockAdapter.Object, _configuration, scopeFactory, _logger.Object);
+        await consumer.StartAsync(TestContext.Current.CancellationToken);
+
+        return captured!;
+    }
 
     private static IConfiguration CreateTestConfiguration()
     {

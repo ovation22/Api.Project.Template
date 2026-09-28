@@ -8,19 +8,37 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Api.Project.Template.Infrastructure.Messaging;
 
 /// <summary>
+/// Non-generic constants for <see cref="GenericMessageConsumer{TMessage, TProcessor}"/>.
+/// </summary>
+public static class GenericMessageConsumer
+{
+    /// <summary>
+    /// The shared consumer settings section; also the fallback for per-consumer sections.
+    /// </summary>
+    public const string DefaultConsumerSection = "MessageBus:Consumer";
+}
+
+/// <summary>
 /// Generic message consumer that works with any broker via IMessageBrokerAdapter.
 /// Resolves message processors from DI and delegates message handling to them.
 /// </summary>
 /// <typeparam name="TMessage">The type of message to consume</typeparam>
 /// <typeparam name="TProcessor">The processor type that handles TMessage</typeparam>
+/// <param name="consumerSection">
+/// Configuration section with this consumer's settings (Queue, Concurrency, MaxRetries, PrefetchCount,
+/// RoutingKey, SubscriptionName). Unset values fall back to <c>MessageBus:Consumer</c>.
+/// </param>
 public class GenericMessageConsumer<TMessage, TProcessor>(
     IMessageBrokerAdapter adapter,
     IConfiguration configuration,
     IServiceScopeFactory scopeFactory,
-    ILoggerAdapter<GenericMessageConsumer<TMessage, TProcessor>> logger)
+    ILoggerAdapter<GenericMessageConsumer<TMessage, TProcessor>> logger,
+    string consumerSection = GenericMessageConsumer.DefaultConsumerSection)
     : IMessageConsumer
     where TProcessor : IMessageProcessor<TMessage>
 {
+    private const string DefaultConsumerSection = GenericMessageConsumer.DefaultConsumerSection;
+
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
         var config = BuildConfiguration();
@@ -92,6 +110,12 @@ public class GenericMessageConsumer<TMessage, TProcessor>(
 
             return result;
         }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            // The consumer is stopping. Let the adapter return the message to the queue
+            // rather than turning shutdown into a processing failure (which would dead-letter it).
+            throw;
+        }
         catch (Exception ex)
         {
             logger.LogError(ex,
@@ -116,28 +140,32 @@ public class GenericMessageConsumer<TMessage, TProcessor>(
                 "Aspire should inject ConnectionStrings:messaging (RabbitMQ), ConnectionStrings:servicebus (Azure Service Bus), " +
                 "or ConnectionStrings:sqs (AWS SQS/LocalStack).");
 
+        // Per-consumer settings come from this consumer's section, falling back to the shared
+        // MessageBus:Consumer section (which is also the default section).
+        string? Setting(string key) => configuration[$"{consumerSection}:{key}"] ?? configuration[$"{DefaultConsumerSection}:{key}"];
+
         var config = new MessageBrokerConfig
         {
             ConnectionString = connectionString,
-            Queue = configuration["MessageBus:Consumer:Queue"]
-                ?? throw new InvalidOperationException("MessageBus:Consumer:Queue not configured"),
-            Concurrency = int.TryParse(configuration["MessageBus:Consumer:Concurrency"], out var concurrency)
+            Queue = configuration[$"{consumerSection}:Queue"]
+                ?? throw new InvalidOperationException($"{consumerSection}:Queue not configured"),
+            Concurrency = int.TryParse(Setting("Concurrency"), out var concurrency)
                 ? concurrency
                 : 5,
-            MaxRetries = int.TryParse(configuration["MessageBus:Consumer:MaxRetries"], out var maxRetries)
+            MaxRetries = int.TryParse(Setting("MaxRetries"), out var maxRetries)
                 ? maxRetries
                 : 3,
-            PrefetchCount = int.TryParse(configuration["MessageBus:Consumer:PrefetchCount"], out var prefetchCount)
+            PrefetchCount = int.TryParse(Setting("PrefetchCount"), out var prefetchCount)
                 ? prefetchCount
                 : 10
         };
 
-        // RabbitMQ-specific configuration
+        // RabbitMQ-specific configuration (the routing key can be set per consumer)
         var exchange = configuration["MessageBus:RabbitMq:Exchange"];
         if (!string.IsNullOrWhiteSpace(exchange))
             config.ProviderSpecific["Exchange"] = exchange;
 
-        var routingKey = configuration["MessageBus:RabbitMq:RoutingKey"];
+        var routingKey = configuration[$"{consumerSection}:RoutingKey"] ?? configuration["MessageBus:RabbitMq:RoutingKey"];
         if (!string.IsNullOrWhiteSpace(routingKey))
             config.ProviderSpecific["RoutingKey"] = routingKey;
 
@@ -150,7 +178,7 @@ public class GenericMessageConsumer<TMessage, TProcessor>(
         if (!string.IsNullOrWhiteSpace(topic))
             config.ProviderSpecific["Topic"] = topic;
 
-        var subscriptionName = configuration["MessageBus:ServiceBus:SubscriptionName"];
+        var subscriptionName = configuration[$"{consumerSection}:SubscriptionName"] ?? configuration["MessageBus:ServiceBus:SubscriptionName"];
         if (!string.IsNullOrWhiteSpace(subscriptionName))
             config.ProviderSpecific["SubscriptionName"] = subscriptionName;
 

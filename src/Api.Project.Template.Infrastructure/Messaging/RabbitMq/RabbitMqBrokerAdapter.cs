@@ -167,6 +167,15 @@ public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger)
                 {
                     result = await handler(message, context);
                 }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // The consumer is stopping: put the message back without counting a retry
+                    await NackMessageAsync(ea.DeliveryTag, requeue: true);
+                    logger.LogInformation(
+                        "Message returned to queue {Queue} (consumer stopping), DeliveryTag {DeliveryTag}",
+                        _queueName, ea.DeliveryTag);
+                    return;
+                }
                 catch (Exception ex)
                 {
                     logger.LogError(ex,
