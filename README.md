@@ -136,6 +136,8 @@ Messaging is provider-switchable via the `MessagingProvider` setting, following 
 
 Changing this single value in AppHost `appsettings.json` switches the broker for all projects (API and Worker). The same setting is passed to each project as an environment variable by the Aspire orchestrator.
 
+Outside Aspire, set `MessagingProvider` on the API and Worker yourself, plus the broker's connection string (`ConnectionStrings:messaging`, `ConnectionStrings:servicebus` or `ConnectionStrings:sqs`). With `MessageBus:Routing:Provider` left at `Auto`, `MessagingProvider` decides the broker; connection-string detection is only a fallback when it's unset or `None`.
+
 ### Architecture
 
 The message bus abstraction spans three layers:
@@ -161,16 +163,16 @@ Handler → IPublisher.Publish(WeatherForecastRequestedEvent)
 
 ### Routing Configuration
 
-Routes are configured per message type in `appsettings.json`. The key is `typeof(T).Name` of the published event. `RoutingKey` (RabbitMQ), `Subject` (Service Bus / SNS), and `Destination` (queue URL or SNS topic ARN for SQS) coexist so you can switch providers without changing routing config:
+Routes are configured per message type in the API's `appsettings.json`. The key is `typeof(T).Name` of the published event. `Destination` is the RabbitMQ exchange / Service Bus topic, and `RoutingKey` (RabbitMQ) or `Subject` (Service Bus / SNS) goes with it:
 
 ```json
 "MessageBus": {
   "Routing": {
     "Provider": "Auto",
-    "DefaultDestination": "weather-requests",
+    "DefaultDestination": "apiprojecttemplate.events",
     "Routes": {
       "WeatherForecastRequestedEvent": {
-        "Destination": "weather-requests",
+        "Destination": "apiprojecttemplate.events",
         "RoutingKey": "WeatherRequested",
         "Subject": "WeatherRequested"
       }
@@ -178,12 +180,20 @@ Routes are configured per message type in `appsettings.json`. The key is `typeof
   },
   "Sqs": {
     "Region": "us-east-1",
-    "DefaultDestination": ""
+    "DefaultDestination": "weather-requests"
   }
 }
 ```
 
-For SQS/SNS, `Destination` in a route is either a queue URL (`https://sqs.us-east-1.amazonaws.com/…/queue-name`) or an SNS topic ARN (`arn:aws:sns:us-east-1:…:topic-name`). The publisher detects the type automatically by the ARN prefix. For local development with LocalStack the URLs follow the pattern `http://localhost:4566/000000000000/queue-name`.
+A caller can override a route per publish via `MessagePublishOptions`: an explicit `Destination` bypasses routing, and `Subject` / `Metadata` apply to that call only.
+
+**SQS destinations.** SQS has no exchange-and-binding indirection, so a RabbitMQ exchange name means nothing to it. **`MessageBus:Sqs:DefaultDestination`, when set, is where every SQS message goes — it takes precedence over the route's `Destination`.** That keeps the shared routing section working for RabbitMQ and Service Bus while SQS publishes straight to the Worker's queue. To route per message type instead (e.g. to SNS topics for fan-out), leave `DefaultDestination` empty and set each route's `Destination` to a queue name, a queue URL (`https://sqs.us-east-1.amazonaws.com/…/queue-name`) or an SNS topic ARN (`arn:aws:sns:us-east-1:…:topic-name`); the publisher detects topic ARNs by prefix.
+
+**SNS fan-out.** When a queue subscribes to an SNS topic without raw message delivery, SQS receives SNS envelopes. The SQS consumer detects and unwraps them automatically (payload and message attributes), so the same processor handles messages sent directly to the queue and via a topic.
+
+**Correlation IDs.** Every publisher stamps a correlation ID — the request's correlation ID if the correlation enricher set one, otherwise the current trace ID — which consumers receive as `MessageContext.CorrelationId`.
+
+**AWS credentials.** `appsettings.Development.json` (API and Worker) holds dummy keys for LocalStack, and the AppHost passes them too. There are no keys in the base `appsettings.json`: deployed, the AWS SDK's default credential chain applies (IAM role, environment variables, shared profile), and without `ConnectionStrings:sqs` the regional AWS endpoint is used. The AppHost only starts LocalStack when running locally — `aspire publish` doesn't deploy it.
 
 ### Consuming — Worker Service
 

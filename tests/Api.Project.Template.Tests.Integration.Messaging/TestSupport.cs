@@ -77,7 +77,7 @@ public static class TestSupport
     /// Docker Desktop / Rancher Desktop on Windows occasionally return a malformed response over the
     /// named pipe ("Invalid chunk header"), which fails an otherwise healthy start.
     /// </summary>
-    public static async Task<TContainer> StartContainerAsync<TContainer>(Func<TContainer> build, int attempts = 3)
+    public static async Task<TContainer> StartContainerAsync<TContainer>(Func<TContainer> build, int attempts = 5)
         where TContainer : DotNet.Testcontainers.Containers.IContainer
     {
         for (var attempt = 1; ; attempt++)
@@ -91,6 +91,7 @@ public static class TestSupport
             catch (Exception) when (attempt < attempts)
             {
                 await container.DisposeAsync();
+                await Task.Delay(TimeSpan.FromSeconds(attempt));
             }
         }
     }

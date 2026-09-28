@@ -393,6 +393,56 @@ public class RoutingMessagePublisherTests
             null!));
     }
 
+    [Fact]
+    public async Task PublishAsync_CalledTwiceWithDifferentMetadata_UsesEachCallsMetadata()
+    {
+        // Arrange
+        // The route is cached per message type; per-call metadata must not be cached with it.
+        var routingConfig = new MessageRoutingConfig
+        {
+            Routes = new Dictionary<string, MessageRoute> { ["TestMessage"] = new() { Destination = "test-queue" } }
+        };
+        var publisher = CreatePublisher(routingConfig);
+        var message = new TestMessage { Id = Guid.NewGuid() };
+
+        // Act
+        await publisher.PublishAsync(message, new MessagePublishOptions { Metadata = new Dictionary<string, object> { ["tenant"] = "a" } },
+            TestContext.Current.CancellationToken);
+        await publisher.PublishAsync(message, new MessagePublishOptions { Metadata = new Dictionary<string, object> { ["tenant"] = "b" } },
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        _mockInnerPublisher.Verify(p => p.PublishAsync(
+            message,
+            It.Is<MessagePublishOptions>(o => o.Metadata != null && (string)o.Metadata["tenant"] == "b"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithCallerSubject_OverridesRouteSubject()
+    {
+        // Arrange
+        var routingConfig = new MessageRoutingConfig
+        {
+            Routes = new Dictionary<string, MessageRoute>
+            {
+                ["TestMessage"] = new() { Destination = "test-queue", RoutingKey = "route-key" }
+            }
+        };
+        var publisher = CreatePublisher(routingConfig);
+        var message = new TestMessage { Id = Guid.NewGuid() };
+
+        // Act
+        await publisher.PublishAsync(message, new MessagePublishOptions { Subject = "caller-key" },
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        _mockInnerPublisher.Verify(p => p.PublishAsync(
+            message,
+            It.Is<MessagePublishOptions>(o => o.Destination == "test-queue" && o.Subject == "caller-key"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     private RoutingMessagePublisher CreatePublisher(MessageRoutingConfig config)
     {
         return new RoutingMessagePublisher(

@@ -31,6 +31,9 @@ public class RabbitMqBrokerAdapter(ILoggerAdapter<RabbitMqBrokerAdapter> logger)
     private int _maxRetries;
     private bool _disposed;
 
+    /// <inheritdoc />
+    public string ConnectionStringName => "messaging";
+
     // Classic queues don't track delivery attempts, so retries are counted in this header.
     private const string RetryCountHeader = "x-retry-count";
 

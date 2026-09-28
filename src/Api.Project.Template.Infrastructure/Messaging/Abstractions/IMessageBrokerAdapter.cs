@@ -10,6 +10,18 @@ namespace Api.Project.Template.Infrastructure.Messaging.Abstractions;
 public interface IMessageBrokerAdapter : IAsyncDisposable
 {
     /// <summary>
+    /// The <c>ConnectionStrings</c> entry this adapter uses (e.g. "messaging" for RabbitMQ).
+    /// Null means "not specified": the consumer falls back to the first of messaging / servicebus / sqs.
+    /// </summary>
+    string? ConnectionStringName => null;
+
+    /// <summary>
+    /// Whether the adapter needs a connection string. SQS doesn't: without one it uses the regional
+    /// AWS endpoint and the default credential chain.
+    /// </summary>
+    bool RequiresConnectionString => true;
+
+    /// <summary>
     /// Configures the adapter and, where possible, establishes the broker connection.
     /// </summary>
     /// <param name="config">The broker configuration including connection string, queue name, and concurrency settings.</param>

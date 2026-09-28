@@ -70,10 +70,14 @@ public class ServiceBusMessagePublisher : IMessagePublisher, IAsyncDisposable
         {
             ContentType = "application/json",
             MessageId = Guid.NewGuid().ToString(),
+            CorrelationId = CorrelationId.Current(),
             Subject = options?.Subject ?? typeof(T).Name
         };
 
-        // Add metadata
+        // Add metadata (caller metadata first, so the standard properties can't be overwritten)
+        foreach (var (key, value) in options?.Metadata ?? new Dictionary<string, object>())
+            sbMessage.ApplicationProperties[key] = value?.ToString();
+
         sbMessage.ApplicationProperties["MessageType"] = typeof(T).FullName ?? typeof(T).Name;
         sbMessage.ApplicationProperties["Timestamp"] = DateTimeOffset.UtcNow.ToString("O");
 

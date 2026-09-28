@@ -37,6 +37,13 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
         PropertyNameCaseInsensitive = true
     };
 
+    /// <inheritdoc />
+    public string ConnectionStringName => "sqs";
+
+    /// <inheritdoc />
+    /// <remarks>The connection string is only the endpoint override (LocalStack); real AWS needs none.</remarks>
+    public bool RequiresConnectionString => false;
+
     private readonly ConcurrentDictionary<Task, byte> _inFlight = new();
     private AmazonSQSClient? _sqsClient;
     private string? _queueUrl;
@@ -241,10 +248,22 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
         Func<TMessage, MessageContext, Task<MessageProcessingResult>> handler,
         CancellationToken cancellationToken)
     {
+        // Message attributes as strings; for an SNS notification, the payload and attributes are inside the envelope
+        var body = sqsMessage.Body;
+        var messageAttributes = (sqsMessage.MessageAttributes ?? [])
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value.StringValue ?? "");
+
+        if (SnsEnvelope.TryUnwrap(body, out var snsPayload, out var snsAttributes))
+        {
+            body = snsPayload;
+            foreach (var (key, value) in snsAttributes)
+                messageAttributes[key] = value;
+        }
+
         TMessage? message;
         try
         {
-            message = JsonSerializer.Deserialize<TMessage>(sqsMessage.Body, _jsonOptions);
+            message = JsonSerializer.Deserialize<TMessage>(body, _jsonOptions);
         }
         catch (JsonException ex)
         {
@@ -267,18 +286,12 @@ public class SqsBrokerAdapter(ILoggerAdapter<SqsBrokerAdapter> logger) : IMessag
         sqsMessage.Attributes?.TryGetValue("ApproximateReceiveCount", out receiveCountStr);
         _ = int.TryParse(receiveCountStr, out var deliveryCount);
 
-        var messageAttributes = sqsMessage.MessageAttributes ?? [];
-
         var context = new MessageContext
         {
             MessageId = sqsMessage.MessageId,
-            CorrelationId = messageAttributes.TryGetValue("CorrelationId", out var correlationAttr)
-                ? correlationAttr.StringValue ?? ""
-                : "",
+            CorrelationId = messageAttributes.GetValueOrDefault("CorrelationId", ""),
             DeliveryCount = deliveryCount,
-            Headers = messageAttributes.ToDictionary(
-                kvp => kvp.Key,
-                kvp => (object)(kvp.Value.StringValue ?? "")),
+            Headers = messageAttributes.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value),
             CancellationToken = cancellationToken
         };
 

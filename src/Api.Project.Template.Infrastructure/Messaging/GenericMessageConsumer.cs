@@ -131,14 +131,21 @@ public class GenericMessageConsumer<TMessage, TProcessor>(
     {
         // Aspire injects broker connection strings under ConnectionStrings:<resource-name>.
         // RabbitMQ resource is named "messaging"; Azure Service Bus resource is named "servicebus"; LocalStack is named "sqs".
-        var connectionString =
-            configuration.GetConnectionString("messaging")
-            ?? configuration.GetConnectionString("servicebus")
-            ?? configuration.GetConnectionString("sqs")
-            ?? throw new InvalidOperationException(
-                "Message broker connection string not configured. " +
-                "Aspire should inject ConnectionStrings:messaging (RabbitMQ), ConnectionStrings:servicebus (Azure Service Bus), " +
-                "or ConnectionStrings:sqs (AWS SQS/LocalStack).");
+        // Use the adapter's own entry, so a leftover connection string for another broker is never picked up.
+        var connectionString = adapter.ConnectionStringName is { } connectionStringName
+            ? configuration.GetConnectionString(connectionStringName)
+            : configuration.GetConnectionString("messaging")
+              ?? configuration.GetConnectionString("servicebus")
+              ?? configuration.GetConnectionString("sqs");
+
+        if (string.IsNullOrEmpty(connectionString) && adapter.RequiresConnectionString)
+        {
+            throw new InvalidOperationException(adapter.ConnectionStringName is { } name
+                ? $"Message broker connection string not configured. Set ConnectionStrings:{name} (Aspire injects it automatically)."
+                : "Message broker connection string not configured. " +
+                  "Aspire should inject ConnectionStrings:messaging (RabbitMQ), ConnectionStrings:servicebus (Azure Service Bus), " +
+                  "or ConnectionStrings:sqs (AWS SQS/LocalStack).");
+        }
 
         // Per-consumer settings come from this consumer's section, falling back to the shared
         // MessageBus:Consumer section (which is also the default section).
@@ -146,7 +153,7 @@ public class GenericMessageConsumer<TMessage, TProcessor>(
 
         var config = new MessageBrokerConfig
         {
-            ConnectionString = connectionString,
+            ConnectionString = connectionString ?? string.Empty,
             Queue = configuration[$"{consumerSection}:Queue"]
                 ?? throw new InvalidOperationException($"{consumerSection}:Queue not configured"),
             Concurrency = int.TryParse(Setting("Concurrency"), out var concurrency)

@@ -4,7 +4,6 @@ using Api.Project.Template.Application.Messaging.Abstractions;
 using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
@@ -21,9 +20,13 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
     private readonly int _maxPublishRetries;
     private readonly TimeSpan _initialRetryDelay;
 
-    // Channel pooling for performance optimization (Phase 2)
+    // One publish channel, created and used only while holding _publishLock (channels are not thread-safe).
     private IChannel? _publishChannel;
     private readonly SemaphoreSlim _publishLock = new(1, 1);
+
+    // Exchanges declared on the current connection (a route may publish to an exchange other than _exchange).
+    private readonly HashSet<string> _declaredExchanges = [];
+    private bool _disposed;
 
     public RabbitMqMessagePublisher(IConfiguration configuration, ILoggerAdapter<RabbitMqMessagePublisher> logger)
     {
@@ -65,11 +68,11 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
         _logger.LogInformation("RabbitMqMessagePublisher configured for exchange {Exchange}", _exchange);
     }
 
-    private async Task EnsureConnectedAsync()
+    private async Task EnsureConnectedAsync(CancellationToken cancellationToken)
     {
         if (_connection is { IsOpen: true }) return;
 
-        await _connectionLock.WaitAsync();
+        await _connectionLock.WaitAsync(cancellationToken);
         try
         {
             if (_connection is { IsOpen: true }) return;
@@ -77,20 +80,9 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
             _logger.LogInformation("Creating RabbitMQ connection...");
 
             // CreateConnectionAsync can throw; allow caller to handle/log and possibly retry.
-            _connection = await _factory.CreateConnectionAsync();
+            _connection = await _factory.CreateConnectionAsync(cancellationToken);
 
             _logger.LogInformation("RabbitMQ connection established (node: {Node})", _connection.Endpoint.HostName);
-
-            // Ensure exchange exists using a short-lived channel
-            var channel = await _connection.CreateChannelAsync();
-            try
-            {
-                await channel.ExchangeDeclareAsync(_exchange, ExchangeType.Topic, durable: true);
-            }
-            finally
-            {
-                await channel.DisposeAsync();
-            }
         }
         finally
         {
@@ -99,44 +91,37 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
     }
 
     /// <summary>
-    /// Ensures a dedicated publish channel is available for message publishing.
-    /// Channel creation uses lock-free double-checked pattern for performance.
-    /// The actual channel usage is protected by _publishLock in PublishAsync.
+    /// Returns an open publish channel, replacing a closed one. Must be called while holding _publishLock.
     /// </summary>
-    private async Task EnsurePublishChannelAsync(CancellationToken cancellationToken = default)
+    private async Task<IChannel> GetPublishChannelAsync(CancellationToken cancellationToken)
     {
-        // Fast path: channel exists and is open
         if (_publishChannel is { IsOpen: true })
+            return _publishChannel;
+
+        if (_publishChannel != null)
+        {
+            try { _publishChannel.Dispose(); } catch { /* already closed */ }
+        }
+
+        _logger.LogInformation("Creating dedicated RabbitMQ publisher channel...");
+        _publishChannel = await _connection!.CreateChannelAsync(cancellationToken: cancellationToken);
+
+        // A new channel may follow a new connection; re-declare exchanges before use.
+        _declaredExchanges.Clear();
+        return _publishChannel;
+    }
+
+    /// <summary>
+    /// Declares the exchange once per connection (idempotent on the broker). Publishing to an undeclared
+    /// exchange makes the broker close the channel with a 404. Must be called while holding _publishLock.
+    /// </summary>
+    private async Task EnsureExchangeAsync(IChannel channel, string exchange, CancellationToken cancellationToken)
+    {
+        if (exchange.Length == 0 || _declaredExchanges.Contains(exchange))
             return;
 
-        // Slow path: need to create channel (only happens once, or after connection loss)
-        // Use Interlocked pattern for lock-free channel creation
-        var currentChannel = _publishChannel;
-        if (currentChannel is not { IsOpen: true })
-        {
-            // Close existing channel if it exists but is not open
-            if (currentChannel != null)
-            {
-                try { await currentChannel.CloseAsync(cancellationToken); } catch { }
-                try { currentChannel.Dispose(); } catch { }
-            }
-
-            _logger.LogInformation("Creating dedicated RabbitMQ publisher channel...");
-            var newChannel = await _connection!.CreateChannelAsync(cancellationToken: cancellationToken);
-
-            // Atomic swap - if another thread created a channel, use theirs and dispose ours
-            var originalChannel = Interlocked.CompareExchange(ref _publishChannel, newChannel, currentChannel);
-            if (originalChannel != currentChannel && originalChannel is { IsOpen: true })
-            {
-                try { await newChannel.CloseAsync(cancellationToken); } catch { }
-                try { newChannel.Dispose(); } catch { }
-                _logger.LogInformation("Another thread created the channel first, using theirs");
-            }
-            else
-            {
-                _logger.LogInformation("Publisher channel created and ready for use");
-            }
-        }
+        await channel.ExchangeDeclareAsync(exchange, ExchangeType.Topic, durable: true, cancellationToken: cancellationToken);
+        _declaredExchanges.Add(exchange);
     }
 
     public async Task PublishAsync<T>(T message, MessagePublishOptions? options = null, CancellationToken cancellationToken = default)
@@ -152,22 +137,20 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
         var body = Encoding.UTF8.GetBytes(payload);
 
         // Prepare message properties BEFORE acquiring lock
-        var correlationId = Activity.Current?.Tags.FirstOrDefault(t => t.Key == "client.correlation_id").Value
-                            ?? Activity.Current?.Baggage.FirstOrDefault(kv => kv.Key == "client.correlation_id").Value
-                            ?? Activity.Current?.TraceId.ToString()
-                            ?? Activity.Current?.Id
-                            ?? Guid.NewGuid().ToString();
+        var correlationId = CorrelationId.Current();
+
+        var headers = new Dictionary<string, object?>();
+        foreach (var (key, value) in options?.Metadata ?? new Dictionary<string, object>())
+            headers[key] = value?.ToString() is { } text ? Encoding.UTF8.GetBytes(text) : null;
+        headers["correlation-id"] = Encoding.UTF8.GetBytes(correlationId);
+        headers["message-type"] = Encoding.UTF8.GetBytes(typeof(T).FullName ?? typeof(T).Name);
 
         var props = new BasicProperties
         {
             ContentType = "application/json",
             DeliveryMode = DeliveryModes.Persistent,
             CorrelationId = correlationId,
-            Headers = new Dictionary<string, object?>
-            {
-                ["correlation-id"] = Encoding.UTF8.GetBytes(correlationId),
-                ["message-type"] = Encoding.UTF8.GetBytes(typeof(T).FullName ?? typeof(T).Name)
-            },
+            Headers = headers,
             Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds())
         };
 
@@ -181,14 +164,15 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
 
             try
             {
-                await EnsureConnectedAsync();
-                await EnsurePublishChannelAsync(cancellationToken);
+                await EnsureConnectedAsync(cancellationToken);
 
-                // Acquire lock to use the shared channel (channels are NOT thread-safe)
                 await _publishLock.WaitAsync(cancellationToken);
                 try
                 {
-                    await _publishChannel!.BasicPublishAsync(
+                    var channel = await GetPublishChannelAsync(cancellationToken);
+                    await EnsureExchangeAsync(channel, ex, cancellationToken);
+
+                    await channel.BasicPublishAsync(
                         exchange: ex,
                         routingKey: rk,
                         mandatory: false,
@@ -203,6 +187,11 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
 
                 _logger.LogInformation("Published message {Type} to exchange {Exchange} with routing key {RoutingKey}", typeof(T).Name, ex, rk);
                 return;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The caller cancelled — not a publish failure, so no error log and no retry
+                throw;
             }
             catch (OperationInterruptedException oex)
             {
@@ -243,6 +232,7 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
 
     private async Task SafeCloseConnectionAsync()
     {
+        await _publishLock.WaitAsync();
         try
         {
             // Close publish channel first
@@ -260,6 +250,7 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
                 finally
                 {
                     _publishChannel = null;
+                    _declaredExchanges.Clear();
                 }
             }
 
@@ -278,6 +269,7 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
         finally
         {
             _connection = null;
+            _publishLock.Release();
         }
     }
 
@@ -286,6 +278,10 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
     /// </summary>
     public async ValueTask DisposeAsync()
     {
+        // Disposed by both RoutingMessagePublisher and the DI container; only the first call does work.
+        if (_disposed) return;
+        _disposed = true;
+
         await SafeCloseConnectionAsync();
         _connectionLock.Dispose();
         _publishLock.Dispose();
@@ -301,6 +297,9 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IAsyncDisposable, IDi
         // We must block here since IDisposable.Dispose is synchronous
         // This is safe in most contexts but could deadlock in ASP.NET synchronization contexts
         // Callers should prefer DisposeAsync when possible
+        if (_disposed) return;
+        _disposed = true;
+
         try
         {
             SafeCloseConnectionAsync().GetAwaiter().GetResult();

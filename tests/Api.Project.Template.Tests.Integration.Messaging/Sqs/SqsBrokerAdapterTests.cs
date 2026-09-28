@@ -6,7 +6,8 @@ using static Api.Project.Template.Tests.Integration.Messaging.TestSupport;
 namespace Api.Project.Template.Tests.Integration.Messaging.Sqs;
 
 [Trait("Category", "Sqs")]
-public sealed class SqsBrokerAdapterTests(LocalStackFixture fixture) : IClassFixture<LocalStackFixture>
+[Collection(LocalStackCollection.Name)]
+public sealed class SqsBrokerAdapterTests(LocalStackFixture fixture)
 {
     private const int MaxRetries = 3;
 
