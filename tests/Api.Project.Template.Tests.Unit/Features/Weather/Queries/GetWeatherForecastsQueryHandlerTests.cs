@@ -5,7 +5,7 @@ using Api.Project.Template.Application.Features.Weather.Queries;
 using Api.Project.Template.Application.Features.Weather.Queries.Handlers;
 using Api.Project.Template.Domain.Entities;
 using Ardalis.Result;
-using FluentAssertions;
+using AwesomeAssertions;
 using MediatR;
 using Moq;
 
