@@ -97,6 +97,62 @@ public class ServiceBusBrokerAdapterTests
         Assert.Equal("test-subscription", config.ProviderSpecific["SubscriptionName"]);
     }
 
+    [Fact]
+    public async Task ConnectAsync_WithoutTopic_ProcessesQueue()
+    {
+        // Arrange
+        await using var adapter = new ServiceBusBrokerAdapter(_logger.Object);
+        var config = new MessageBrokerConfig { ConnectionString = TestConnectionString, Queue = "weather-requests" };
+
+        // Act
+        // ConnectAsync only configures the processor; nothing connects until SubscribeAsync.
+        await adapter.ConnectAsync(config, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("weather-requests", adapter.EntityPath);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WithTopic_ProcessesTopicSubscription()
+    {
+        // Arrange
+        await using var adapter = new ServiceBusBrokerAdapter(_logger.Object);
+        var config = new MessageBrokerConfig
+        {
+            ConnectionString = TestConnectionString,
+            Queue = "weather-requests",
+            ProviderSpecific = { ["Topic"] = "apiprojecttemplate.events", ["SubscriptionName"] = "weather-sub" }
+        };
+
+        // Act
+        await adapter.ConnectAsync(config, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("apiprojecttemplate.events/Subscriptions/weather-sub", adapter.EntityPath, ignoreCase: true);
+    }
+
+    [Fact]
+    public async Task ConnectAsync_WithTopicAndNoSubscriptionName_UsesQueueAsSubscription()
+    {
+        // Arrange
+        await using var adapter = new ServiceBusBrokerAdapter(_logger.Object);
+        var config = new MessageBrokerConfig
+        {
+            ConnectionString = TestConnectionString,
+            Queue = "weather-requests",
+            ProviderSpecific = { ["Topic"] = "apiprojecttemplate.events" }
+        };
+
+        // Act
+        await adapter.ConnectAsync(config, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("apiprojecttemplate.events/Subscriptions/weather-requests", adapter.EntityPath, ignoreCase: true);
+    }
+
+    private const string TestConnectionString =
+        "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=test";
+
     // Test message type
     private class TestMessage
     {

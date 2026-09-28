@@ -35,13 +35,13 @@ jobs:
             --output-format cobertura
             "dotnet run --project tests/Api.Project.Template.Tests.Unit
             --configuration Release --no-build
-            -- -trx TestResults/unit.trx"
+            -- -result-trx TestResults/unit.trx"
 
         - name: Run architecture tests
           run: >
             dotnet run --project tests/Api.Project.Template.Tests.Architecture
             --configuration Release --no-build
-            -- -trx TestResults/architecture.trx
+            -- -result-trx TestResults/architecture.trx
 
         - name: Run integration tests
           run: >
@@ -50,7 +50,16 @@ jobs:
             --output-format cobertura
             "dotnet run --project tests/Api.Project.Template.Tests.Integration
             --configuration Release --no-build
-            -- -trx TestResults/integration.trx"
+            -- -result-trx TestResults/integration.trx"
+
+        - name: Run messaging integration tests
+          run: >
+            dotnet-coverage collect
+            --output TestResults/messaging.cobertura.xml
+            --output-format cobertura
+            "dotnet run --project tests/Api.Project.Template.Tests.Integration.Messaging
+            --configuration Release --no-build
+            -- -result-trx TestResults/messaging.trx"
 
         - name: Publish test results
           uses: EnricoMi/publish-unit-test-result-action@v2

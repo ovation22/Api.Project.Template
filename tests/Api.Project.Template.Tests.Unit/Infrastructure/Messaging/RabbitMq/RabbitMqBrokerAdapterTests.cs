@@ -43,24 +43,22 @@ public class RabbitMqBrokerAdapterTests
     }
 
     [Fact]
-    public async Task ConnectAsync_RequiresConnectionString()
+    public async Task ConnectAsync_WhenBrokerIsUnreachable_ThrowsBrokerUnreachableException()
     {
         // Arrange
         var adapter = new RabbitMqBrokerAdapter(_logger.Object);
 
+        // Port 1 on loopback refuses immediately, whatever is running on the machine
+        // (an empty connection string would fall back to localhost:5672, which may be a real broker).
         var config = new MessageBrokerConfig
         {
-            ConnectionString = "", // Empty connection string
+            ConnectionString = "amqp://guest:guest@127.0.0.1:1",
             Queue = "test-queue"
         };
 
         // Act & Assert
-        // This will fail to connect, but we're testing that it attempts to parse
-        // In a real scenario, we'd need a mock or actual RabbitMQ
-        await Assert.ThrowsAnyAsync<Exception>(async () =>
-        {
-            await adapter.ConnectAsync(config, CancellationToken.None);
-        });
+        await Assert.ThrowsAsync<RabbitMQ.Client.Exceptions.BrokerUnreachableException>(() =>
+            adapter.ConnectAsync(config, TestContext.Current.CancellationToken));
     }
 
     [Fact]
